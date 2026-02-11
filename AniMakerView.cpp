@@ -191,6 +191,7 @@ void CAniMakerView::OnUpdate(CView* /*pSender*/, LPARAM /*lHint*/, CObject* /*pH
 BOOL CAniMakerView::PreTranslateMessage(MSG* pMsg)
 {
 	// TODO: 여기에 특수화된 코드를 추가 및/또는 기본 클래스를 호출합니다.
+	TRACE(_T("message = %u, wParam = %u, lParam = %ld\n"), pMsg->message, pMsg->wParam, pMsg->lParam);
 	if (pMsg->message == WM_KEYDOWN)
 	{
 		if (pMsg->wParam == VK_ADD || pMsg->wParam == VK_OEM_PLUS)
@@ -211,6 +212,11 @@ BOOL CAniMakerView::PreTranslateMessage(MSG* pMsg)
 			Invalidate(FALSE);
 			return TRUE;
 		}
+	}
+	else if (pMsg->message == WM_MOUSEHWHEEL)
+	{
+		TRACE(_T("message = %d, wParam = %d, lParam = %d\n"), pMsg->message, pMsg->wParam, pMsg->lParam);
+		OnMouseHWheel((UINT)HIWORD(pMsg->wParam), (short)LOWORD(pMsg->wParam), CPoint(GET_X_LPARAM(pMsg->lParam), GET_Y_LPARAM(pMsg->lParam)));
 	}
 	return CView::PreTranslateMessage(pMsg);
 }

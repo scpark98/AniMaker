@@ -41,6 +41,7 @@ public:
 //	afx_msg void OnColorizationColorChanged(DWORD dwColorizationColor, BOOL bOpacity);
 	afx_msg void OnDropFiles(HDROP hDropInfo);
 	virtual BOOL PreTranslateMessage(MSG* pMsg);
+	afx_msg void OnClose();
 };
 
 

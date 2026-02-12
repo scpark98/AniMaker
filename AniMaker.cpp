@@ -112,12 +112,29 @@ BOOL CAniMakerApp::InitInstance()
 	}
 	m_pMainWnd = pMainFrame;
 
+	// --- MainFrame 위치 복원 ---
+	WINDOWPLACEMENT wp = { sizeof(WINDOWPLACEMENT) };
+	wp.rcNormalPosition.left = GetProfileInt(_T("MainFrame"), _T("left"), CW_USEDEFAULT);
+	wp.rcNormalPosition.top = GetProfileInt(_T("MainFrame"), _T("top"), CW_USEDEFAULT);
+	wp.rcNormalPosition.right = GetProfileInt(_T("MainFrame"), _T("right"), CW_USEDEFAULT);
+	wp.rcNormalPosition.bottom = GetProfileInt(_T("MainFrame"), _T("bottom"), CW_USEDEFAULT);
+	wp.showCmd = GetProfileInt(_T("MainFrame"), _T("showCmd"), SW_SHOWDEFAULT);
+	wp.flags = GetProfileInt(_T("MainFrame"), _T("flags"), 0);
+
+	if (wp.rcNormalPosition.left != CW_USEDEFAULT)
+	{
+		pMainFrame->SetWindowPlacement(&wp);
+	}
+	else
+	{
+		pMainFrame->ShowWindow(m_nCmdShow);
+	}
+	pMainFrame->UpdateWindow();
+
 
 	// 표준 셸 명령, DDE, 파일 열기에 대한 명령줄을 구문 분석합니다.
 	CCommandLineInfo cmdInfo;
 	ParseCommandLine(cmdInfo);
-
-
 
 	// 명령줄에 지정된 명령을 디스패치합니다.
 	// 응용 프로그램이 /RegServer, /Register, /Unregserver 또는 /Unregister로 시작된 경우 FALSE를 반환합니다.

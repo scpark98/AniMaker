@@ -7,6 +7,7 @@
 #include "Common/directx/CSCD2Context/SCD2Context.h"
 #include "Common/directx/CSCD2Image/SCD2Image.h"
 
+#include "PreviewDlg.h"
 
 class CAniMakerView : public CView
 {
@@ -24,6 +25,7 @@ public:
 private:
 	CSCD2Context			m_d2dc;
 	CSCD2Image				m_img;
+	CPreviewDlg				m_preview;
 
 	float					m_zoom = 1.f;
 	D2D1_POINT_2F			m_pt_scroll = D2D1::Point2F(0.f, 0.f);
@@ -37,6 +39,10 @@ private:
 
 	void					recalc_scrollbars();
 	float					get_frame_step();
+	void					ensure_frame_visible(int index);
+
+	int						m_index = -1;
+	int						get_frame_index(CPoint pt);
 
 // 재정의입니다.
 public:
@@ -79,6 +85,7 @@ public:
 	afx_msg void OnSize(UINT nType, int cx, int cy);
 	afx_msg void OnTimer(UINT_PTR nIDEvent);
 	afx_msg void OnVScroll(UINT nSBCode, UINT nPos, CScrollBar* pScrollBar);
+	afx_msg void OnMenuPreview();
 };
 
 #ifndef _DEBUG  // AniMakerView.cpp의 디버그 버전

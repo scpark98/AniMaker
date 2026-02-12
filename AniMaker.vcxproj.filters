@@ -66,6 +66,30 @@
     <ClInclude Include="..\Common\directx\CSCD2Image\SCD2Image.h">
       <Filter>Common</Filter>
     </ClInclude>
+    <ClInclude Include="PreviewDlg.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Common\CDialog\SCD2ImageDlg\SCD2ImageDlg.h">
+      <Filter>Common</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Common\ThumbCtrl\SCThumbCtrl.h">
+      <Filter>Common</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Common\CSliderCtrl\SCSliderCtrl\SCSliderCtrl.h">
+      <Filter>Common</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Common\CStatic\SCStatic\SCStatic.h">
+      <Filter>Common</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Common\CEdit\SCEdit\SCEdit.h">
+      <Filter>Common</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Common\thread\ThreadManager.h">
+      <Filter>Common</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Common\messagebox\Win32InputBox\Win32InputBox.h">
+      <Filter>Common</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="AniMaker.cpp">
@@ -102,6 +126,30 @@
       <Filter>Common</Filter>
     </ClCompile>
     <ClCompile Include="..\Common\directx\CSCD2Image\SCD2Image.cpp">
+      <Filter>Common</Filter>
+    </ClCompile>
+    <ClCompile Include="PreviewDlg.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Common\CDialog\SCD2ImageDlg\SCD2ImageDlg.cpp">
+      <Filter>Common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Common\ThumbCtrl\SCThumbCtrl.cpp">
+      <Filter>Common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Common\CSliderCtrl\SCSliderCtrl\SCSliderCtrl.cpp">
+      <Filter>Common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Common\CStatic\SCStatic\SCStatic.cpp">
+      <Filter>Common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Common\CEdit\SCEdit\SCEdit.cpp">
+      <Filter>Common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Common\thread\ThreadManager.cpp">
+      <Filter>Common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Common\messagebox\Win32InputBox\Win32InputBox.cpp">
       <Filter>Common</Filter>
     </ClCompile>
   </ItemGroup>

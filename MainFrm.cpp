@@ -20,6 +20,7 @@ BEGIN_MESSAGE_MAP(CMainFrame, CMDIFrameWnd)
 	ON_WM_CREATE()
 //	ON_WM_DWMCOLORIZATIONCOLORCHANGED()
 ON_WM_DROPFILES()
+ON_WM_CLOSE()
 END_MESSAGE_MAP()
 
 static UINT indicators[] =
@@ -119,4 +120,21 @@ BOOL CMainFrame::PreTranslateMessage(MSG* pMsg)
 	}
 
 	return CMDIFrameWnd::PreTranslateMessage(pMsg);
+}
+
+void CMainFrame::OnClose()
+{
+	// TODO: 여기에 메시지 처리기 코드를 추가 및/또는 기본값을 호출합니다.
+	WINDOWPLACEMENT wp = { sizeof(WINDOWPLACEMENT) };
+	GetWindowPlacement(&wp);
+
+	CWinApp* pApp = AfxGetApp();
+	pApp->WriteProfileInt(_T("MainFrame"), _T("flags"), wp.flags);
+	pApp->WriteProfileInt(_T("MainFrame"), _T("showCmd"), wp.showCmd);
+	pApp->WriteProfileInt(_T("MainFrame"), _T("left"), wp.rcNormalPosition.left);
+	pApp->WriteProfileInt(_T("MainFrame"), _T("top"), wp.rcNormalPosition.top);
+	pApp->WriteProfileInt(_T("MainFrame"), _T("right"), wp.rcNormalPosition.right);
+	pApp->WriteProfileInt(_T("MainFrame"), _T("bottom"), wp.rcNormalPosition.bottom);
+
+	CMDIFrameWnd::OnClose();
 }

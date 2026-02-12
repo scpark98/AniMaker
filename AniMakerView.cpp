@@ -41,6 +41,7 @@ BEGIN_MESSAGE_MAP(CAniMakerView, CView)
 	ON_WM_SIZE()
 	ON_WM_TIMER()
 	ON_WM_VSCROLL()
+	ON_COMMAND(ID_MENU_PREVIEW, &CAniMakerView::OnMenuPreview)
 END_MESSAGE_MAP()
 
 // CAniMakerView 생성/소멸
@@ -97,6 +98,8 @@ void CAniMakerView::OnDraw(CDC* /*pDC*/)
 
 		float x = m_thumb_margin;
 		float y = m_thumb_margin;
+		CString str;
+
 		for (int i = 0; i < nFrames; i++)
 		{
 			ID2D1Bitmap1* pFrame = m_img.get_frame_img(i);
@@ -104,6 +107,17 @@ void CAniMakerView::OnDraw(CDC* /*pDC*/)
 			{
 				D2D1_RECT_F rc = D2D1::RectF(x, y, x + thumbW, y + thumbH);
 				d2dc->DrawBitmap(pFrame, rc);
+
+				str.Format(_T("F:%d D:%d"), i, m_img.get_frame_delay(i));
+				D2D1_RECT_F rtext = rc;
+				rtext.top = rc.bottom + 8;
+				rtext.bottom = rtext.top + 24;
+				draw_text(d2dc, rtext, str, _T("Arial"), 12.0f / m_zoom, FW_NORMAL, Gdiplus::Color::Black, Gdiplus::Color::LightGray, DT_CENTER | DT_TOP);
+				if (i == m_index)
+				{
+					inflate_rect(rc, 0, 0);
+					draw_rect(d2dc, rc, Gdiplus::Color::RoyalBlue, Gdiplus::Color::Transparent, 2.0f);
+				}
 			}
 			x += thumbW + m_thumb_gap;
 		}
@@ -168,9 +182,13 @@ void CAniMakerView::OnInitialUpdate()
 	if (!pDoc)
 		pDoc = GetDocument();
 
-	//m_img.load(m_d2dc.get_WICFactory(), m_d2dc.get_d2dc(), _T("D:\\calling.gif"));
-	//recalc_scrollbars();
-	//Invalidate();
+	m_img.load(m_d2dc.get_WICFactory(), m_d2dc.get_d2dc(), _T("D:\\calling.gif"));
+	recalc_scrollbars();
+	Invalidate();
+
+	m_preview.Create(IDD_PREVIEW, this);
+	m_preview.ShowWindow(SW_SHOW);
+
 	DragAcceptFiles();
 }
 
@@ -186,12 +204,14 @@ void CAniMakerView::OnUpdate(CView* /*pSender*/, LPARAM /*lHint*/, CObject* /*pH
 	int cx = max(rc.Width(), 1);
 	int cy = max(rc.Height(), 1);
 	m_d2dc.init(m_hWnd, cx, cy);
+
+	m_zoom = get_profile_value(_T("setting"), _T("zoom"), 1.f);
 }
 
 BOOL CAniMakerView::PreTranslateMessage(MSG* pMsg)
 {
 	// TODO: 여기에 특수화된 코드를 추가 및/또는 기본 클래스를 호출합니다.
-	TRACE(_T("message = %u, wParam = %u, lParam = %ld\n"), pMsg->message, pMsg->wParam, pMsg->lParam);
+	//TRACE(_T("message = %u, wParam = %u, lParam = %ld\n"), pMsg->message, pMsg->wParam, pMsg->lParam);
 	if (pMsg->message == WM_KEYDOWN)
 	{
 		if (pMsg->wParam == VK_ADD || pMsg->wParam == VK_OEM_PLUS)
@@ -212,10 +232,47 @@ BOOL CAniMakerView::PreTranslateMessage(MSG* pMsg)
 			Invalidate(FALSE);
 			return TRUE;
 		}
+		else if (pMsg->wParam == VK_LEFT || pMsg->wParam == VK_RIGHT)
+		{
+			int nFrames = m_img.get_frame_count();
+			if (nFrames <= 0)
+				return TRUE;
+
+			if (pMsg->wParam == VK_LEFT)
+				m_index = max(0, m_index - 1);
+			else
+				m_index = min(nFrames - 1, m_index + 1);
+
+			// 선택 프레임이 보이도록 자동 스크롤
+			ensure_frame_visible(m_index);
+			Invalidate(FALSE);
+			return TRUE;
+		}
+		else if (pMsg->wParam == VK_HOME)
+		{
+			m_index = 0;
+			ensure_frame_visible(m_index);
+			Invalidate(FALSE);
+			return TRUE;
+		}
+		else if (pMsg->wParam == VK_END)
+		{
+			int nFrames = m_img.get_frame_count();
+			if (nFrames > 0)
+				m_index = nFrames - 1;
+			ensure_frame_visible(m_index);
+			Invalidate(FALSE);
+			return TRUE;
+		}
+		else if (pMsg->wParam == 'C')
+		{
+			m_img.copy_to_clipboard();
+			return TRUE;
+		}
 	}
 	else if (pMsg->message == WM_MOUSEHWHEEL)
 	{
-		TRACE(_T("message = %d, wParam = %d, lParam = %d\n"), pMsg->message, pMsg->wParam, pMsg->lParam);
+		//TRACE(_T("message = %d, wParam = %d, lParam = %d\n"), pMsg->message, pMsg->wParam, pMsg->lParam);
 		OnMouseHWheel((UINT)HIWORD(pMsg->wParam), (short)LOWORD(pMsg->wParam), CPoint(GET_X_LPARAM(pMsg->lParam), GET_Y_LPARAM(pMsg->lParam)));
 	}
 	return CView::PreTranslateMessage(pMsg);
@@ -291,6 +348,9 @@ void CAniMakerView::OnHScroll(UINT nSBCode, UINT nPos, CScrollBar* pScrollBar)
 void CAniMakerView::OnLButtonDown(UINT nFlags, CPoint point)
 {
 	// TODO: 여기에 메시지 처리기 코드를 추가 및/또는 기본값을 호출합니다.
+	m_index = get_frame_index(point);
+	trace(m_index);
+	Invalidate();
 
 	CView::OnLButtonDown(nFlags, point);
 }
@@ -314,27 +374,19 @@ BOOL CAniMakerView::OnMouseWheel(UINT nFlags, short zDelta, CPoint pt)
 	// TODO: 여기에 메시지 처리기 코드를 추가 및/또는 기본값을 호출합니다.
 	ScreenToClient(&pt);
 
-	if (nFlags & MK_CONTROL)
-	{
-		// Ctrl + Wheel: 커서 중심 줌
-		float wx = pt.x / m_zoom + m_pt_scroll.x;
-		float wy = pt.y / m_zoom + m_pt_scroll.y;
+	//Wheel에 따라 커서 중심 줌
+	float wx = pt.x / m_zoom + m_pt_scroll.x;
+	float wy = pt.y / m_zoom + m_pt_scroll.y;
 
-		if (zDelta > 0)
-			m_zoom *= m_zoom_step;
-		else
-			m_zoom /= m_zoom_step;
-		m_zoom = max(m_zoom_min, min(m_zoom, m_zoom_max));
-
-		// 줌 후 동일 월드 좌표가 커서 아래에 유지되도록 보정
-		m_pt_scroll.x = wx - pt.x / m_zoom;
-		m_pt_scroll.y = wy - pt.y / m_zoom;
-	}
+	if (zDelta > 0)
+		m_zoom *= m_zoom_step;
 	else
-	{
-		// 일반 Wheel: 세로 스크롤
-		m_pt_scroll.y -= zDelta / m_zoom;
-	}
+		m_zoom /= m_zoom_step;
+	m_zoom = max(m_zoom_min, min(m_zoom, m_zoom_max));
+
+	// 줌 후 동일 월드 좌표가 커서 아래에 유지되도록 보정
+	m_pt_scroll.x = wx - pt.x / m_zoom;
+	m_pt_scroll.y = wy - pt.y / m_zoom;
 
 	recalc_scrollbars();
 	Invalidate(FALSE);
@@ -457,6 +509,9 @@ void CAniMakerView::recalc_scrollbars()
 	si.nPage = (UINT)visibleH;
 	si.nPos = (int)m_pt_scroll.y;
 	SetScrollInfo(SB_VERT, &si, TRUE);
+
+	//m_zoom이 변경되면 항상 recalc_scrollbars()가 호출되므로 여기에서 저장
+	write_profile_value(_T("setting"), _T("zoom"), m_zoom);
 }
 
 float CAniMakerView::get_frame_step()
@@ -466,3 +521,73 @@ float CAniMakerView::get_frame_step()
 	return thumbW + m_thumb_gap;
 }
 
+int	CAniMakerView::get_frame_index(CPoint pt)
+{
+	int nFrames = m_img.get_frame_count();
+	if (nFrames <= 0 || !m_img.is_valid())
+		return -1;
+
+	// screen → world 좌표 변환
+	float wx = pt.x / m_zoom + m_pt_scroll.x;
+	float wy = pt.y / m_zoom + m_pt_scroll.y;
+
+	float imgH = m_img.get_height();
+	float thumbH = m_sz_thumb;
+	float thumbW = (imgH > 0.f) ? (m_img.get_width() / imgH * thumbH) : thumbH;
+	float frame_step = thumbW + m_thumb_gap;
+
+	// Y 범위 체크
+	if (wy < m_thumb_margin || wy > m_thumb_margin + thumbH)
+		return -1;
+
+	// X로 인덱스 계산
+	float relX = wx - m_thumb_margin;
+	if (relX < 0.f)
+		return -1;
+
+	int index = (int)(relX / frame_step);
+
+	// gap 영역 클릭 제외 (썸네일 이미지 위만 유효)
+	float withinFrame = relX - index * frame_step;
+	if (withinFrame > thumbW)
+		return -1;
+
+	if (index < 0 || index >= nFrames)
+		return -1;
+
+	return index;
+}
+
+void CAniMakerView::ensure_frame_visible(int index)
+{
+	int nFrames = m_img.get_frame_count();
+	if (index < 0 || index >= nFrames)
+		return;
+
+	float frame_step = get_frame_step();
+	float thumbW = frame_step - m_thumb_gap;
+
+	// 해당 프레임의 월드 좌표 범위
+	float frameLeft = m_thumb_margin + index * frame_step;
+	float frameRight = frameLeft + thumbW;
+
+	CRect rc;
+	GetClientRect(&rc);
+	float visibleW = rc.Width() / m_zoom;
+
+	// 왼쪽으로 벗어난 경우
+	if (frameLeft < m_pt_scroll.x)
+		m_pt_scroll.x = frameLeft - m_thumb_margin;
+
+	// 오른쪽으로 벗어난 경우
+	if (frameRight > m_pt_scroll.x + visibleW)
+		m_pt_scroll.x = frameRight - visibleW + m_thumb_margin;
+
+	recalc_scrollbars();
+}
+
+void CAniMakerView::OnMenuPreview()
+{
+	m_preview.set_image(&m_img);
+	m_preview.ShowWindow(SW_SHOW);
+}

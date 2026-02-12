@@ -13,7 +13,11 @@ class CPreviewDlg : public CDialogEx
 	CResizeCtrl		m_resize;
 	CSCD2ImageDlg	m_imgDlg;
 
-	void			set_image();
+	void			set_image(CSCD2Image* pImg);
+
+protected:
+	CSCD2Image*		m_img;
+
 public:
 	CPreviewDlg(CWnd* pParent = nullptr);   // 표준 생성자입니다.
 	virtual ~CPreviewDlg();

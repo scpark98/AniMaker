@@ -106,7 +106,8 @@
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
-      <AdditionalDependencies>libwebp.lib;libwebpmux.lib;</AdditionalDependencies>
+      <AdditionalDependencies>
+      </AdditionalDependencies>
       <AdditionalLibraryDirectories>D:\1.Projects_C++\Common\directx\webp\lib;</AdditionalLibraryDirectories>
     </Link>
     <Midl>
@@ -132,7 +133,8 @@
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
-      <AdditionalDependencies>libwebp.lib;libwebpmux.lib;</AdditionalDependencies>
+      <AdditionalDependencies>
+      </AdditionalDependencies>
       <AdditionalLibraryDirectories>D:\1.Projects_C++\Common\directx\webp\lib;</AdditionalLibraryDirectories>
     </Link>
     <Midl>

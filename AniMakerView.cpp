@@ -588,6 +588,12 @@ void CAniMakerView::ensure_frame_visible(int index)
 
 void CAniMakerView::OnMenuPreview()
 {
+	//현재 view에서 이미지를 불러올 때 생성된 facotory와 m_preview에서 사용하는 m_imgDlg를 생성할 때 생성된 factory가 다르므로
+	//이미지 객체만 전달한다고 해서 올바로 그려지지 않는다.
+	//m_preview에서 생성한 m_imgDlg 생성 시 만들어진 factory로 설정하여 테스트 해 볼 수는 있으나 정석이 아니며
+	//동일한 D2D 팩토리/디바이스 공유 방식으로 구현해야 한다.
+	//복잡하므로 우선 m_img를 외부파일로 저장하고 이를 m_preview에서 읽어서 재생하는 방식으로 구현한다.
+	m_img.save_webp(_T("D:\\share.webp"));
 	m_preview.set_image(&m_img);
 	m_preview.ShowWindow(SW_SHOW);
 }

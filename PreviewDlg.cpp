@@ -105,6 +105,13 @@ void CPreviewDlg::OnPaint()
 
 void CPreviewDlg::set_image(CSCD2Image* pImg)
 {
-	m_img = pImg;
-	m_imgDlg.set_image(pImg);
+	//m_imgDlg.load(_T("D:\\calling.gif"));
+
+	//pImg는 AniMakerView의 m_d2dc에서 로딩된 이미지이고
+	//m_imgDlg가 생성될 때 만들어진 m_d2dc와 다를 것이다.
+	//따라서 set_image
+	//m_img = pImg;
+	//m_imgDlg.set_image(pImg);
+	//m_imgDlg.play();
+	m_imgDlg.load(_T("D:\\share.webp"), false);
 }

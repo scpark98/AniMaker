@@ -25,7 +25,10 @@ END_MESSAGE_MAP()
 
 static UINT indicators[] =
 {
-	ID_SEPARATOR,           // 상태 줄 표시기
+	ID_SEPARATOR,
+	ID_SEPARATOR,
+	ID_SEPARATOR,
+	ID_SEPARATOR,		//for zoom ratio
 	ID_INDICATOR_CAPS,
 	ID_INDICATOR_NUM,
 	ID_INDICATOR_SCRL,
@@ -63,6 +66,11 @@ int CMainFrame::OnCreate(LPCREATESTRUCT lpCreateStruct)
 
 	// TODO: 도구 모음을 도킹할 수 없게 하려면 이 세 줄을 삭제하십시오.
 	m_wndToolBar.EnableDocking(CBRS_ALIGN_ANY);
+	m_wndStatusBar.SetPaneInfo(0, ID_SEPARATOR, SBPS_STRETCH, 240);
+	m_wndStatusBar.SetPaneInfo(1, ID_SEPARATOR, SBPS_NORMAL, 45);
+	m_wndStatusBar.SetPaneInfo(2, ID_SEPARATOR, SBPS_NORMAL, 45);
+	m_wndStatusBar.SetPaneInfo(3, ID_SEPARATOR, SBPS_NORMAL, 45);
+
 	EnableDocking(CBRS_ALIGN_ANY);
 	DockControlBar(&m_wndToolBar);
 
@@ -137,4 +145,12 @@ void CMainFrame::OnClose()
 	pApp->WriteProfileInt(_T("MainFrame"), _T("bottom"), wp.rcNormalPosition.bottom);
 
 	CMDIFrameWnd::OnClose();
+}
+
+void CMainFrame::set_zoom_info(float zoom)
+{
+	CString str;
+
+	str.Format(_T("%d%%"), (int)(zoom * 100));
+	m_wndStatusBar.SetPaneText(3, str);
 }

@@ -15,6 +15,7 @@ public:
 
 // 작업입니다.
 public:
+	void				set_zoom_info(float zoom);
 
 // 재정의입니다.
 public:

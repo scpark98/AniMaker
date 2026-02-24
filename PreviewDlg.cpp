@@ -101,6 +101,11 @@ void CPreviewDlg::OnPaint()
 	// 그리기 메시지에 대해서는 CDialogEx::OnPaint()을(를) 호출하지 마십시오.
 }
 
+void CPreviewDlg::set_shared_d2dc(CSCD2Context* pShared)
+{
+	m_imgDlg.set_shared_d2dc(pShared);
+}
+
 void CPreviewDlg::set_image(CSCD2Image* pImg)
 {
 	//m_imgDlg.load(_T("D:\\calling.gif"));
@@ -109,7 +114,7 @@ void CPreviewDlg::set_image(CSCD2Image* pImg)
 	//m_imgDlg가 생성될 때 만들어진 m_d2dc와 다를 것이다.
 	//따라서 set_image
 	//m_img = pImg;
-	//m_imgDlg.set_image(pImg);
-	//m_imgDlg.play();
-	m_imgDlg.load(_T("D:\\share.webp"), false);
+	m_imgDlg.set_image(pImg);
+	m_imgDlg.play();
+	//m_imgDlg.load(_T("D:\\share.webp"), false);
 }

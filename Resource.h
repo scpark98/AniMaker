@@ -8,15 +8,38 @@
 #define IDR_AniMakerTYPE                130
 #define ID_WINDOW_MANAGER               131
 #define IDD_PREVIEW                     310
+#define IDR_MENU1                       312
 #define ID_32771                        32771
 #define ID_MENU_PREVIEW                 32772
+#define ID_FRAME_PASTE                  32773
+#define ID_PASTE_INTOSELECTEDFRAME      32774
+#define ID_MENU_PASTE_INTO_SELECTED_FRAME 32775
+#define ID_MENU_PASTE_BEFORE_CURRENT_FRAME 32776
+#define ID_MENU_PASTE_AFTER_CURRENT_FRAME 32777
+#define ID_PASTE_CUT                    32778
+#define ID_PASTE_COPY                   32779
+#define ID_FRAME_DELETE                 32780
+#define ID_FRAME_DUPLICATESELECTED      32781
+#define ID_FRAME_INSERTFRAME            32782
+#define ID_INSERTFRAME_FROMFILE         32783
+#define ID_INSERTFRAME_EMPTY            32784
+#define ID_FRAME_FRAMEPROPERTY          32785
+#define ID_FRAME_SAVEFRAMEAS            32786
+#define ID_MENU_CUT                     32787
+#define ID_MENU_COPY                    32788
+#define ID_MENU_DELETE                  32789
+#define ID_MENU_DUPLICATE_SELECTED      32790
+#define ID_MENU_INSERT_FRAME_FROM_FILE  32791
+#define ID_MENU_INSERT_FRAME_EMPTY      32792
+#define ID_MENU_FRAME_PROPERTY          32793
+#define ID_MENU_SAVE_FRAME_AS           32794
 
 // Next default values for new objects
 // 
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
-#define _APS_NEXT_RESOURCE_VALUE        312
-#define _APS_NEXT_COMMAND_VALUE         32773
+#define _APS_NEXT_RESOURCE_VALUE        313
+#define _APS_NEXT_COMMAND_VALUE         32795
 #define _APS_NEXT_CONTROL_VALUE         1000
 #define _APS_NEXT_SYMED_VALUE           310
 #endif

@@ -69,9 +69,8 @@ BOOL CAniMakerView::PreCreateWindow(CREATESTRUCT& cs)
 
 void CAniMakerView::OnDraw(CDC* /*pDC*/)
 {
-	CRect rc;
-
-	GetClientRect(rc);
+	//CRect rc;
+	//GetClientRect(rc);
 
 	ID2D1DeviceContext* d2dc = m_d2dc.get_d2dc();
 	if (!d2dc)
@@ -107,6 +106,10 @@ void CAniMakerView::OnDraw(CDC* /*pDC*/)
 			if (pFrame)
 			{
 				D2D1_RECT_F rc = D2D1::RectF(x, y, x + thumbW, y + thumbH);
+
+				if (m_img.get_alpha_pixel_count() > 0)
+					d2dc->FillRectangle(rc, m_d2dc.get_zigzag_brush().Get());
+
 				d2dc->DrawBitmap(pFrame, rc);
 				draw_rect(d2dc, rc, Gdiplus::Color::LightGray, Gdiplus::Color::Transparent, 1.0f);
 
@@ -553,6 +556,7 @@ int	CAniMakerView::get_frame_index(CPoint pt)
 		return -1;
 
 	int index = (int)(relX / frame_step);
+	//trace(index);
 
 	// gap 영역 클릭 제외 (썸네일 이미지 위만 유효)
 	float withinFrame = relX - index * frame_step;

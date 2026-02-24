@@ -41,6 +41,7 @@ private:
 	float					get_frame_step();
 	void					ensure_frame_visible(int index);
 
+	//선택된 인덱스
 	int						m_index = -1;
 	int						get_frame_index(CPoint pt);
 

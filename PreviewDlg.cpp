@@ -57,14 +57,12 @@ BOOL CPreviewDlg::OnInitDialog()
 
 void CPreviewDlg::OnBnClickedOk()
 {
-	// TODO: 여기에 컨트롤 알림 처리기 코드를 추가합니다.
-	CDialogEx::OnOK();
 }
 
 void CPreviewDlg::OnBnClickedCancel()
 {
-	// TODO: 여기에 컨트롤 알림 처리기 코드를 추가합니다.
-	CDialogEx::OnCancel();
+	m_imgDlg.stop();
+	ShowWindow(SW_HIDE);
 }
 
 void CPreviewDlg::OnWindowPosChanged(WINDOWPOS* lpwndpos)

@@ -10,6 +10,7 @@
 #include "AniMaker.h"
 #endif
 
+#include "MainFrm.h"
 #include "AniMakerDoc.h"
 #include "AniMakerView.h"
 
@@ -107,6 +108,7 @@ void CAniMakerView::OnDraw(CDC* /*pDC*/)
 			{
 				D2D1_RECT_F rc = D2D1::RectF(x, y, x + thumbW, y + thumbH);
 				d2dc->DrawBitmap(pFrame, rc);
+				draw_rect(d2dc, rc, Gdiplus::Color::LightGray, Gdiplus::Color::Transparent, 1.0f);
 
 				str.Format(_T("F:%d D:%d"), i, m_img.get_frame_delay(i));
 				D2D1_RECT_F rtext = rc;
@@ -182,12 +184,13 @@ void CAniMakerView::OnInitialUpdate()
 	if (!pDoc)
 		pDoc = GetDocument();
 
-	m_img.load(m_d2dc.get_WICFactory(), m_d2dc.get_d2dc(), _T("D:\\calling.gif"));
+	m_img.load(m_d2dc.get_WICFactory(), m_d2dc.get_d2dc(), _T("D:\\chart.gif"), false);
 	recalc_scrollbars();
 	Invalidate();
 
+	// Preview에 D2D 디바이스 공유 설정 (create 전에 호출)
+	m_preview.set_shared_d2dc(&m_d2dc);
 	m_preview.Create(IDD_PREVIEW, this);
-	m_preview.ShowWindow(SW_SHOW);
 
 	DragAcceptFiles();
 }
@@ -217,7 +220,7 @@ BOOL CAniMakerView::PreTranslateMessage(MSG* pMsg)
 		if (pMsg->wParam == VK_ADD || pMsg->wParam == VK_OEM_PLUS)
 		{
 			// '+' 키: 줌 인
-			m_zoom *= m_zoom_step;
+			m_zoom += m_zoom_step;
 			m_zoom = min(m_zoom, m_zoom_max);
 			recalc_scrollbars();
 			Invalidate(FALSE);
@@ -226,7 +229,7 @@ BOOL CAniMakerView::PreTranslateMessage(MSG* pMsg)
 		else if (pMsg->wParam == VK_SUBTRACT || pMsg->wParam == VK_OEM_MINUS)
 		{
 			// '-' 키: 줌 아웃
-			m_zoom /= m_zoom_step;
+			m_zoom -= m_zoom_step;
 			m_zoom = max(m_zoom, m_zoom_min);
 			recalc_scrollbars();
 			Invalidate(FALSE);
@@ -272,8 +275,9 @@ BOOL CAniMakerView::PreTranslateMessage(MSG* pMsg)
 	}
 	else if (pMsg->message == WM_MOUSEHWHEEL)
 	{
-		//TRACE(_T("message = %d, wParam = %d, lParam = %d\n"), pMsg->message, pMsg->wParam, pMsg->lParam);
-		OnMouseHWheel((UINT)HIWORD(pMsg->wParam), (short)LOWORD(pMsg->wParam), CPoint(GET_X_LPARAM(pMsg->lParam), GET_Y_LPARAM(pMsg->lParam)));
+		TRACE(_T("message = %d, wParam = %d, lParam = %d\n"), pMsg->message, pMsg->wParam, pMsg->lParam);
+		OnMouseHWheel((UINT)LOWORD(pMsg->wParam), (short)HIWORD(pMsg->wParam), CPoint(GET_X_LPARAM(pMsg->lParam), GET_Y_LPARAM(pMsg->lParam)));
+		return TRUE;
 	}
 	return CView::PreTranslateMessage(pMsg);
 }
@@ -328,19 +332,19 @@ void CAniMakerView::OnHScroll(UINT nSBCode, UINT nPos, CScrollBar* pScrollBar)
 
 	switch (nSBCode)
 	{
-	case SB_LINELEFT:    curFrame -= 1;           break;
-	case SB_LINERIGHT:   curFrame += 1;           break;
-	case SB_PAGELEFT:    curFrame -= pageFrames;  break;
-	case SB_PAGERIGHT:   curFrame += pageFrames;  break;
-	case SB_THUMBTRACK:  curFrame = (int)roundf((float)si.nTrackPos / frame_step); break;
-	default: return;
+		case SB_LINELEFT:    curFrame -= 1;           break;
+		case SB_LINERIGHT:   curFrame += 1;           break;
+		case SB_PAGELEFT:    curFrame -= pageFrames;  break;
+		case SB_PAGERIGHT:   curFrame += pageFrames;  break;
+		case SB_THUMBTRACK:  curFrame = (int)roundf((float)si.nTrackPos / frame_step); break;
+		default: return;
 	}
 
 	curFrame = max(0, curFrame);
 	m_pt_scroll.x = curFrame * frame_step;
 
 	recalc_scrollbars();
-	Invalidate(FALSE);
+	Invalidate();
 
 	//CView::OnHScroll(nSBCode, nPos, pScrollBar);
 }
@@ -379,9 +383,9 @@ BOOL CAniMakerView::OnMouseWheel(UINT nFlags, short zDelta, CPoint pt)
 	float wy = pt.y / m_zoom + m_pt_scroll.y;
 
 	if (zDelta > 0)
-		m_zoom *= m_zoom_step;
+		m_zoom += m_zoom_step;
 	else
-		m_zoom /= m_zoom_step;
+		m_zoom -= m_zoom_step;
 	m_zoom = max(m_zoom_min, min(m_zoom, m_zoom_max));
 
 	// 줌 후 동일 월드 좌표가 커서 아래에 유지되도록 보정
@@ -389,13 +393,16 @@ BOOL CAniMakerView::OnMouseWheel(UINT nFlags, short zDelta, CPoint pt)
 	m_pt_scroll.y = wy - pt.y / m_zoom;
 
 	recalc_scrollbars();
-	Invalidate(FALSE);
+	Invalidate();
+	((CMainFrame*)(AfxGetApp()->m_pMainWnd))->set_zoom_info(m_zoom);
+
 	return TRUE;
 	//return CView::OnMouseWheel(nFlags, zDelta, pt);
 }
 
 void CAniMakerView::OnMouseHWheel(UINT nFlags, short zDelta, CPoint pt)
 {
+	TRACE(_T("OnMouseHWheel\n"));
 	float frame_step = get_frame_step();
 	if (frame_step <= 0.f)
 		return;
@@ -407,7 +414,7 @@ void CAniMakerView::OnMouseHWheel(UINT nFlags, short zDelta, CPoint pt)
 		m_pt_scroll.x -= frame_step;
 
 	recalc_scrollbars();
-	Invalidate(FALSE);
+	Invalidate();
 	//CView::OnMouseHWheel(nFlags, zDelta, pt);
 }
 
@@ -453,12 +460,12 @@ void CAniMakerView::OnVScroll(UINT nSBCode, UINT nPos, CScrollBar* pScrollBar)
 	int pos = si.nPos;
 	switch (nSBCode)
 	{
-	case SB_LINEUP:      pos -= 20;           break;
-	case SB_LINEDOWN:    pos += 20;           break;
-	case SB_PAGEUP:      pos -= si.nPage;     break;
-	case SB_PAGEDOWN:    pos += si.nPage;     break;
-	case SB_THUMBTRACK:  pos = si.nTrackPos;  break;
-	default: return;
+		case SB_LINEUP:      pos -= 20;           break;
+		case SB_LINEDOWN:    pos += 20;           break;
+		case SB_PAGEUP:      pos -= si.nPage;     break;
+		case SB_PAGEDOWN:    pos += si.nPage;     break;
+		case SB_THUMBTRACK:  pos = si.nTrackPos;  break;
+		default: return;
 	}
 
 	m_pt_scroll.y = (float)max(si.nMin, min(pos, si.nMax - (int)si.nPage));
@@ -588,12 +595,16 @@ void CAniMakerView::ensure_frame_visible(int index)
 
 void CAniMakerView::OnMenuPreview()
 {
-	//현재 view에서 이미지를 불러올 때 생성된 facotory와 m_preview에서 사용하는 m_imgDlg를 생성할 때 생성된 factory가 다르므로
-	//이미지 객체만 전달한다고 해서 올바로 그려지지 않는다.
+	//현재 view에서 생성된 facotory와 m_preview에서 사용하는 m_imgDlg를 생성할 때 생성된 factory가 다르므로
+	//이미지 객체만 전달한다고 해서 그려지지 않는다.
 	//m_preview에서 생성한 m_imgDlg 생성 시 만들어진 factory로 설정하여 테스트 해 볼 수는 있으나 정석이 아니며
 	//동일한 D2D 팩토리/디바이스 공유 방식으로 구현해야 한다.
 	//복잡하므로 우선 m_img를 외부파일로 저장하고 이를 m_preview에서 읽어서 재생하는 방식으로 구현한다.
-	m_img.save_webp(_T("D:\\share.webp"));
+	//m_img.save_webp(_T("D:\\share.webp"));
 	m_preview.set_image(&m_img);
+
+	if (m_preview.IsIconic())
+		m_preview.ShowWindow(SW_RESTORE);
+
 	m_preview.ShowWindow(SW_SHOW);
 }

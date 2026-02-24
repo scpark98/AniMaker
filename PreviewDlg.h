@@ -13,6 +13,7 @@ class CPreviewDlg : public CDialogEx
 	CResizeCtrl		m_resize;
 	CSCD2ImageDlg	m_imgDlg;
 
+	void			set_shared_d2dc(CSCD2Context* pShared); 
 	void			set_image(CSCD2Image* pImg);
 
 protected:

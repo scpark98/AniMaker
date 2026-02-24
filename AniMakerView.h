@@ -33,9 +33,9 @@ private:
 	float					m_sz_thumb = 100.f;
 	float					m_thumb_gap = 8.f;
 	float					m_thumb_margin = 12.f;
-	float					m_zoom_max = 16.f;
-	float					m_zoom_min = 0.1f;
-	float					m_zoom_step = 1.15f;
+	float					m_zoom_max = 8.f;
+	float					m_zoom_min = 0.4f;
+	float					m_zoom_step = 0.2f;
 
 	void					recalc_scrollbars();
 	float					get_frame_step();

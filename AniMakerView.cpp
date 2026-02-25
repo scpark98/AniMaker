@@ -43,6 +43,20 @@ BEGIN_MESSAGE_MAP(CAniMakerView, CView)
 	ON_WM_TIMER()
 	ON_WM_VSCROLL()
 	ON_COMMAND(ID_MENU_PREVIEW, &CAniMakerView::OnMenuPreview)
+	ON_COMMAND(ID_MENU_CUT, &CAniMakerView::OnMenuCut)
+	ON_UPDATE_COMMAND_UI(ID_MENU_CUT, &CAniMakerView::OnUpdateMenuCut)
+	ON_COMMAND(ID_MENU_COPY, &CAniMakerView::OnMenuCopy)
+	ON_COMMAND(ID_MENU_PASTE_INTO_SELECTED_FRAME, &CAniMakerView::OnMenuPasteIntoSelectedFrame)
+	ON_COMMAND(ID_MENU_PASTE_BEFORE_CURRENT_FRAME, &CAniMakerView::OnMenuPasteBeforeCurrentFrame)
+	ON_COMMAND(ID_MENU_PASTE_AFTER_CURRENT_FRAME, &CAniMakerView::OnMenuPasteAfterCurrentFrame)
+	ON_COMMAND(ID_MENU_DELETE, &CAniMakerView::OnMenuDelete)
+	ON_COMMAND(ID_MENU_DUPLICATE_SELECTED, &CAniMakerView::OnMenuDuplicateSelected)
+	ON_COMMAND(ID_MENU_INSERT_FRAME_FROM_FILE, &CAniMakerView::OnMenuInsertFrameFromFile)
+	ON_COMMAND(ID_MENU_INSERT_FRAME_EMPTY, &CAniMakerView::OnMenuInsertFrameEmpty)
+	ON_COMMAND(ID_MENU_FRAME_PROPERTY, &CAniMakerView::OnMenuFrameProperty)
+	ON_COMMAND(ID_MENU_SAVE_FRAME_AS, &CAniMakerView::OnMenuSaveFrameAs)
+	ON_WM_RBUTTONDOWN()
+	ON_COMMAND(ID_MENU_VIEW_ANIMATION, &CAniMakerView::OnMenuViewAnimation)
 END_MESSAGE_MAP()
 
 // CAniMakerView 생성/소멸
@@ -118,7 +132,7 @@ void CAniMakerView::OnDraw(CDC* /*pDC*/)
 				rtext.top = rc.bottom + 8;
 				rtext.bottom = rtext.top + 24;
 				draw_text(d2dc, rtext, str, _T("Arial"), 12.0f / m_zoom, FW_NORMAL, Gdiplus::Color::Black, Gdiplus::Color::LightGray, DT_CENTER | DT_TOP);
-				if (i == m_index)
+				if (std::find(m_selected.begin(), m_selected.end(), i) != m_selected.end())
 				{
 					inflate_rect(rc, 0, 0);
 					draw_rect(d2dc, rc, Gdiplus::Color::RoyalBlue, Gdiplus::Color::Transparent, 2.0f);
@@ -195,6 +209,12 @@ void CAniMakerView::OnInitialUpdate()
 	m_preview.set_shared_d2dc(&m_d2dc);
 	m_preview.Create(IDD_PREVIEW, this);
 
+
+	m_message.set_text(this, _T(""), 32, Gdiplus::FontStyleBold, 4.0f, 2.4f);
+	m_message.set_stroke_color(Gdiplus::Color::Black);
+	m_message.set_alpha(192);
+	m_message.use_control(false);
+
 	DragAcceptFiles();
 }
 
@@ -212,6 +232,7 @@ void CAniMakerView::OnUpdate(CView* /*pSender*/, LPARAM /*lHint*/, CObject* /*pH
 	m_d2dc.init(m_hWnd, cx, cy);
 
 	m_zoom = get_profile_value(_T("setting"), _T("zoom"), 1.f);
+	((CMainFrame*)(AfxGetApp()->m_pMainWnd))->set_zoom_info(m_zoom);
 }
 
 BOOL CAniMakerView::PreTranslateMessage(MSG* pMsg)
@@ -225,6 +246,7 @@ BOOL CAniMakerView::PreTranslateMessage(MSG* pMsg)
 			// '+' 키: 줌 인
 			m_zoom += m_zoom_step;
 			m_zoom = min(m_zoom, m_zoom_max);
+			((CMainFrame*)(AfxGetApp()->m_pMainWnd))->set_zoom_info(m_zoom);
 			recalc_scrollbars();
 			Invalidate(FALSE);
 			return TRUE;
@@ -234,6 +256,7 @@ BOOL CAniMakerView::PreTranslateMessage(MSG* pMsg)
 			// '-' 키: 줌 아웃
 			m_zoom -= m_zoom_step;
 			m_zoom = max(m_zoom, m_zoom_min);
+			((CMainFrame*)(AfxGetApp()->m_pMainWnd))->set_zoom_info(m_zoom);
 			recalc_scrollbars();
 			Invalidate(FALSE);
 			return TRUE;
@@ -244,35 +267,48 @@ BOOL CAniMakerView::PreTranslateMessage(MSG* pMsg)
 			if (nFrames <= 0)
 				return TRUE;
 
+			//멀티선택 상태에서 좌우 방향키를 누른다면 맨 처음 혹은 맨 끝 선택항목만 남긴다.
+			if (m_selected.size() > 1)
+				m_selected.resize(1);
+
 			if (pMsg->wParam == VK_LEFT)
-				m_index = max(0, m_index - 1);
+				m_selected[0] = max(0, m_selected[0] - 1);
 			else
-				m_index = min(nFrames - 1, m_index + 1);
+				m_selected[0] = min(nFrames - 1, m_selected[0] + 1);
 
 			// 선택 프레임이 보이도록 자동 스크롤
-			ensure_frame_visible(m_index);
+			ensure_frame_visible(m_selected[0]);
 			Invalidate(FALSE);
 			return TRUE;
 		}
 		else if (pMsg->wParam == VK_HOME)
 		{
-			m_index = 0;
-			ensure_frame_visible(m_index);
+			//멀티선택 상태에서 좌우 방향키를 누른다면 맨 처음 혹은 맨 끝 선택항목만 남긴다.
+			if (m_selected.size() > 1)
+				m_selected.resize(1);
+
+			m_selected[0] = 0;
+			ensure_frame_visible(m_selected[0]);
 			Invalidate(FALSE);
 			return TRUE;
 		}
 		else if (pMsg->wParam == VK_END)
 		{
+			//멀티선택 상태에서 좌우 방향키를 누른다면 맨 처음 혹은 맨 끝 선택항목만 남긴다.
+			if (m_selected.size() > 1)
+				m_selected.resize(1);
+
 			int nFrames = m_img.get_frame_count();
 			if (nFrames > 0)
-				m_index = nFrames - 1;
-			ensure_frame_visible(m_index);
+				m_selected[0] = nFrames - 1;
+			ensure_frame_visible(m_selected[0]);
 			Invalidate(FALSE);
 			return TRUE;
 		}
 		else if (pMsg->wParam == 'C')
 		{
-			m_img.copy_to_clipboard();
+			if (IsCtrlPressed())
+				OnMenuCopy();
 			return TRUE;
 		}
 	}
@@ -354,9 +390,28 @@ void CAniMakerView::OnHScroll(UINT nSBCode, UINT nPos, CScrollBar* pScrollBar)
 
 void CAniMakerView::OnLButtonDown(UINT nFlags, CPoint point)
 {
-	// TODO: 여기에 메시지 처리기 코드를 추가 및/또는 기본값을 호출합니다.
-	m_index = get_frame_index(point);
-	trace(m_index);
+	int index = get_frame_index(point);
+
+	//일단 프레임이 아닌 영역을 클릭하면 아무 동작도 하지 않는다.
+	if (index < 0)
+		return;
+
+	//Ctrl 키가 눌린 상태에서 클릭하면 다중 선택/해제
+	if (IsCtrlPressed())
+	{
+		auto it = std::find(m_selected.begin(), m_selected.end(), index);
+		if (it != m_selected.end())
+			m_selected.erase(it);  // 이미 선택된 프레임이면 선택 해제
+		else
+			m_selected.push_back(index);  // 선택되지 않은 프레임이면 선택 추가
+	}
+	else
+	{
+		m_selected.clear();
+		if (index >= 0)
+			m_selected.push_back(index);
+	}
+
 	Invalidate();
 
 	CView::OnLButtonDown(nFlags, point);
@@ -395,9 +450,10 @@ BOOL CAniMakerView::OnMouseWheel(UINT nFlags, short zDelta, CPoint pt)
 	m_pt_scroll.x = wx - pt.x / m_zoom;
 	m_pt_scroll.y = wy - pt.y / m_zoom;
 
+	((CMainFrame*)(AfxGetApp()->m_pMainWnd))->set_zoom_info(m_zoom);
+
 	recalc_scrollbars();
 	Invalidate();
-	((CMainFrame*)(AfxGetApp()->m_pMainWnd))->set_zoom_info(m_zoom);
 
 	return TRUE;
 	//return CView::OnMouseWheel(nFlags, zDelta, pt);
@@ -421,9 +477,45 @@ void CAniMakerView::OnMouseHWheel(UINT nFlags, short zDelta, CPoint pt)
 	//CView::OnMouseHWheel(nFlags, zDelta, pt);
 }
 
+void CAniMakerView::OnRButtonDown(UINT nFlags, CPoint point)
+{
+	int index = get_frame_index(point);
+
+	//선택된 항목에서 우클릭은 바로 팝업 메뉴를 표시하지만
+	//선택되지 않은 항목을 우클릭하면 선택 정보를 모두 초기화하고 우클릭한 프레임을 선택한 후 팝업 메뉴를 표시한다.
+	if (index >= 0 && std::find(m_selected.begin(), m_selected.end(), index) == m_selected.end())
+	{
+		m_selected.clear();
+		m_selected.push_back(index);
+		Invalidate();
+	}
+
+	CView::OnRButtonDown(nFlags, point);
+}
+
 void CAniMakerView::OnRButtonUp(UINT nFlags, CPoint point)
 {
 	// TODO: 여기에 메시지 처리기 코드를 추가 및/또는 기본값을 호출합니다.
+	CMenu menu;
+	CMenu* pMenu;
+
+	int index = get_frame_index(point);
+
+	//프레임이 아닌 영역에서 우클릭 시 표시하는 메뉴가 다르다.
+	if (index < 0)
+		menu.LoadMenu(IDR_MENU_CONTEXT);
+	else
+		menu.LoadMenu(IDR_MENU_FRAME_CONTEXT);
+
+	pMenu = menu.GetSubMenu(0);
+
+	ClientToScreen(&point);
+
+
+
+
+
+	pMenu->TrackPopupMenu(TPM_LEFTALIGN | TPM_RIGHTBUTTON, point.x, point.y, this);
 
 	CView::OnRButtonUp(nFlags, point);
 }
@@ -611,4 +703,115 @@ void CAniMakerView::OnMenuPreview()
 		m_preview.ShowWindow(SW_RESTORE);
 
 	m_preview.ShowWindow(SW_SHOW);
+}
+
+void CAniMakerView::show_message(CString message)
+{
+	//::PlaySound(MAKEINTRESOURCE(IDR_WAVE_DICK), GetModuleHandle(NULL), SND_RESOURCE | SND_ASYNC);
+
+	//메시지 폰트 크기는 rc height에 비례하는 크기로 자동 조정되어야 한다.
+	CRect rc;
+	GetClientRect(rc);
+
+	CSCShapeDlgTextSetting* setting = m_message.get_text_setting();
+	setting->text = message;
+	setting->text_prop.size = rc.Height() / 26.18f;
+	Clamp(setting->text_prop.size, 16.0f, 44.0f);
+
+	m_message.set_text(setting);
+	m_message.CenterWindow();
+	m_message.fade_in(0, 1000, true);
+
+	SetFocus();
+}
+
+void CAniMakerView::OnMenuCut()
+{
+	// TODO: 여기에 명령 처리기 코드를 추가합니다.
+}
+
+void CAniMakerView::OnUpdateMenuCut(CCmdUI* pCmdUI)
+{
+	// TODO: 여기에 명령 업데이트 UI 처리기 코드를 추가합니다.
+}
+
+void CAniMakerView::OnMenuCopy()
+{
+	m_img.copy_to_clipboard(m_selected[0]);
+}
+
+void CAniMakerView::OnMenuPasteIntoSelectedFrame()
+{
+	// TODO: 여기에 명령 처리기 코드를 추가합니다.
+}
+
+void CAniMakerView::OnMenuPasteBeforeCurrentFrame()
+{
+	// TODO: 여기에 명령 처리기 코드를 추가합니다.
+}
+
+void CAniMakerView::OnMenuPasteAfterCurrentFrame()
+{
+	// TODO: 여기에 명령 처리기 코드를 추가합니다.
+}
+
+void CAniMakerView::OnMenuDelete()
+{
+	if (m_selected.size() == 0)
+		return;
+
+
+
+	recalc_scrollbars();
+
+	Invalidate();
+}
+
+void CAniMakerView::OnMenuDuplicateSelected()
+{
+	if (m_selected.size() != 1)
+	{
+		show_message(_T("프레임 복제 기능은 하나의 프레임을 선택했을때만 가능합니다."));
+		return;
+	}
+
+	CSCD2Image frame_img;
+
+	frame_img.create(m_img.get_WICFactory2(), m_img.get_d2dc(), m_img.get_width(), m_img.get_height());
+
+	D2D1_POINT_2U pt = { 0, 0 };
+	D2D1_RECT_U r = { 0, 0, m_img.get_width(), m_img.get_height() };
+	frame_img.get_frame_img(0)->CopyFromBitmap(&pt, m_img.get_frame_img(m_selected[0]), &r);
+	m_img.get_img_list()->insert(m_img.get_img_list()->begin() + m_selected[0], std::move(frame_img.get_frame_img(0)));
+	m_img.get_frame_delay_list()->insert(m_img.get_frame_delay_list()->begin() + m_selected[0], 1234);
+
+	recalc_scrollbars();
+
+	Invalidate();
+}
+
+void CAniMakerView::OnMenuInsertFrameFromFile()
+{
+	// TODO: 여기에 명령 처리기 코드를 추가합니다.
+}
+
+void CAniMakerView::OnMenuInsertFrameEmpty()
+{
+	// TODO: 여기에 명령 처리기 코드를 추가합니다.
+}
+
+void CAniMakerView::OnMenuFrameProperty()
+{
+	// TODO: 여기에 명령 처리기 코드를 추가합니다.
+}
+
+void CAniMakerView::OnMenuSaveFrameAs()
+{
+	// TODO: 여기에 명령 처리기 코드를 추가합니다.
+}
+
+
+void CAniMakerView::OnMenuViewAnimation()
+{
+	OnMenuPreview();
 }

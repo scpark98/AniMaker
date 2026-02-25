@@ -4,6 +4,14 @@
 
 #pragma once
 
+enum status_id
+{
+	status_default = 0,
+	status_frame_info,		//total frames, image size
+	status_zoom_info,		//zoom percentage
+	status_selected_info,	//selected info
+};
+
 class CMainFrame : public CMDIFrameWnd
 {
 	DECLARE_DYNAMIC(CMainFrame)
@@ -15,7 +23,7 @@ public:
 
 // 작업입니다.
 public:
-	void				set_zoom_info(float zoom);
+	void				set_status_text(int index, CString text);
 
 // 재정의입니다.
 public:

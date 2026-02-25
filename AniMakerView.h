@@ -6,6 +6,7 @@
 
 #include "Common/directx/CSCD2Context/SCD2Context.h"
 #include "Common/directx/CSCD2Image/SCD2Image.h"
+#include "Common/CDialog/SCShapeDlg/SCShapeDlg.h"
 
 #include "PreviewDlg.h"
 
@@ -42,8 +43,11 @@ private:
 	void					ensure_frame_visible(int index);
 
 	//선택된 인덱스
-	int						m_index = -1;
+	std::deque<int>			m_selected;
 	int						get_frame_index(CPoint pt);
+
+	CSCShapeDlg				m_message;
+	void					show_message(CString message);
 
 // 재정의입니다.
 public:
@@ -87,6 +91,20 @@ public:
 	afx_msg void OnTimer(UINT_PTR nIDEvent);
 	afx_msg void OnVScroll(UINT nSBCode, UINT nPos, CScrollBar* pScrollBar);
 	afx_msg void OnMenuPreview();
+	afx_msg void OnMenuCut();
+	afx_msg void OnUpdateMenuCut(CCmdUI* pCmdUI);
+	afx_msg void OnMenuCopy();
+	afx_msg void OnMenuPasteIntoSelectedFrame();
+	afx_msg void OnMenuPasteBeforeCurrentFrame();
+	afx_msg void OnMenuPasteAfterCurrentFrame();
+	afx_msg void OnMenuDelete();
+	afx_msg void OnMenuDuplicateSelected();
+	afx_msg void OnMenuInsertFrameFromFile();
+	afx_msg void OnMenuInsertFrameEmpty();
+	afx_msg void OnMenuFrameProperty();
+	afx_msg void OnMenuSaveFrameAs();
+	afx_msg void OnRButtonDown(UINT nFlags, CPoint point);
+	afx_msg void OnMenuViewAnimation();
 };
 
 #ifndef _DEBUG  // AniMakerView.cpp의 디버그 버전

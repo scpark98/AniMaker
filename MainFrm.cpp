@@ -147,10 +147,7 @@ void CMainFrame::OnClose()
 	CMDIFrameWnd::OnClose();
 }
 
-void CMainFrame::set_zoom_info(float zoom)
+void CMainFrame::set_status_text(int index, CString text)
 {
-	CString str;
-
-	str.Format(_T("%d%%"), (int)(zoom * 100));
-	m_wndStatusBar.SetPaneText(3, str);
+	m_wndStatusBar.SetPaneText(index, text);
 }

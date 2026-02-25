@@ -8,7 +8,9 @@
 #define IDR_AniMakerTYPE                130
 #define ID_WINDOW_MANAGER               131
 #define IDD_PREVIEW                     310
-#define IDR_MENU1                       312
+#define IDR_MENU_FRAME_CONTEXT          312
+#define IDR_MENU_FRAME_CONTEXT1         313
+#define IDR_MENU_CONTEXT                313
 #define ID_32771                        32771
 #define ID_MENU_PREVIEW                 32772
 #define ID_FRAME_PASTE                  32773
@@ -33,13 +35,17 @@
 #define ID_MENU_INSERT_FRAME_EMPTY      32792
 #define ID_MENU_FRAME_PROPERTY          32793
 #define ID_MENU_SAVE_FRAME_AS           32794
+#define ID_CONTEXT_GOTOFRAME            32795
+#define ID_CONTEXT_VIEWANIMATION        32796
+#define ID_MENU_GO_TO_FRAME             32797
+#define ID_MENU_VIEW_ANIMATION          32798
 
 // Next default values for new objects
 // 
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_NEXT_RESOURCE_VALUE        313
-#define _APS_NEXT_COMMAND_VALUE         32795
+#define _APS_NEXT_COMMAND_VALUE         32799
 #define _APS_NEXT_CONTROL_VALUE         1000
 #define _APS_NEXT_SYMED_VALUE           310
 #endif

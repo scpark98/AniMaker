@@ -22,11 +22,11 @@
 
 BEGIN_MESSAGE_MAP(CAniMakerApp, CWinApp)
 	ON_COMMAND(ID_APP_ABOUT, &CAniMakerApp::OnAppAbout)
-	// 표준 파일을 기초로 하는 문서 명령입니다.
-	ON_COMMAND(ID_FILE_NEW, &CWinApp::OnFileNew)
-	ON_COMMAND(ID_FILE_OPEN, &CWinApp::OnFileOpen)
 	// 표준 인쇄 설정 명령입니다.
 	ON_COMMAND(ID_FILE_PRINT_SETUP, &CWinApp::OnFilePrintSetup)
+	ON_COMMAND(ID_FILE_NEW, &CAniMakerApp::OnFileNew)
+	ON_COMMAND(ID_FILE_OPEN, &CAniMakerApp::OnFileOpen)
+	ON_COMMAND(ID_FILE_CLOSE, &CAniMakerApp::OnFileClose)
 END_MESSAGE_MAP()
 
 
@@ -201,3 +201,56 @@ void CAniMakerApp::OnAppAbout()
 
 
 
+
+void CAniMakerApp::OnFileNew()
+{
+	// MainFrm::OnDropFiles와 동일한 패턴: 새 Doc/Frame/View 생성 후 load 호출
+	POSITION pos = GetFirstDocTemplatePosition();
+	CDocTemplate* pTemplate = GetNextDocTemplate(pos);
+	if (!pTemplate)
+		return;
+
+	CDocument* pDoc = pTemplate->OpenDocumentFile(nullptr); // 빈 문서 생성
+	if (!pDoc)
+		return;
+
+	POSITION viewPos = pDoc->GetFirstViewPosition();
+	CView* pView = pDoc->GetNextView(viewPos);
+	CAniMakerView* pAniView = dynamic_cast<CAniMakerView*>(pView);
+}
+
+void CAniMakerApp::OnFileOpen()
+{
+	CString recent = GetProfileString(_T("setting"), _T("recent opened file"), _T(""));
+	CFileDialog dlg(TRUE, nullptr, recent, OFN_HIDEREADONLY | OFN_FILEMUSTEXIST,
+		_T("Animation Files (*.gif;*.webp)|*.gif;*.webp|All Files (*.*)|*.*||"));
+
+	if (dlg.DoModal() == IDCANCEL)
+		return;
+
+	CString path = dlg.GetPathName();
+	WriteProfileString(_T("setting"), _T("recent opened file"), path);
+
+	// MainFrm::OnDropFiles와 동일한 패턴: 새 Doc/Frame/View 생성 후 load 호출
+	POSITION pos = GetFirstDocTemplatePosition();
+	CDocTemplate* pTemplate = GetNextDocTemplate(pos);
+	if (!pTemplate)
+		return;
+
+	CDocument* pDoc = pTemplate->OpenDocumentFile(nullptr); // 빈 문서 생성
+	if (!pDoc)
+		return;
+
+	POSITION viewPos = pDoc->GetFirstViewPosition();
+	CView* pView = pDoc->GetNextView(viewPos);
+	CAniMakerView* pAniView = dynamic_cast<CAniMakerView*>(pView);
+	if (pAniView)
+	{
+		pAniView->load(path);
+	}
+}
+
+void CAniMakerApp::OnFileClose()
+{
+	// TODO: 여기에 명령 처리기 코드를 추가합니다.
+}

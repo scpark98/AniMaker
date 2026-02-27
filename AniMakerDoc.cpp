@@ -136,3 +136,17 @@ void CAniMakerDoc::Dump(CDumpContext& dc) const
 
 
 // CAniMakerDoc 명령
+
+BOOL CAniMakerDoc::OnOpenDocument(LPCTSTR lpszPathName)
+{
+	if (!CDocument::OnOpenDocument(lpszPathName))
+		return FALSE;
+
+	// TODO:  여기에 특수화된 작성 코드를 추가합니다.
+	DeleteContents();
+	SetModifiedFlag(FALSE);
+
+	m_file = lpszPathName;
+
+	return TRUE;
+}

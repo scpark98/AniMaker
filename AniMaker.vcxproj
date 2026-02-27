@@ -229,6 +229,7 @@
     <ClInclude Include="AniMakerDoc.h" />
     <ClInclude Include="AniMakerView.h" />
     <ClInclude Include="ChildFrm.h" />
+    <ClInclude Include="FrameProperty.h" />
     <ClInclude Include="framework.h" />
     <ClInclude Include="MainFrm.h" />
     <ClInclude Include="pch.h" />
@@ -331,6 +332,7 @@
     <ClCompile Include="AniMakerDoc.cpp" />
     <ClCompile Include="AniMakerView.cpp" />
     <ClCompile Include="ChildFrm.cpp" />
+    <ClCompile Include="FrameProperty.cpp" />
     <ClCompile Include="MainFrm.cpp" />
     <ClCompile Include="pch.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Create</PrecompiledHeader>

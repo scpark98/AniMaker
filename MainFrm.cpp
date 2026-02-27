@@ -5,6 +5,7 @@
 #include "pch.h"
 #include "framework.h"
 #include "AniMaker.h"
+#include "AniMakerView.h"
 
 #include "MainFrm.h"
 
@@ -18,20 +19,19 @@ IMPLEMENT_DYNAMIC(CMainFrame, CMDIFrameWnd)
 
 BEGIN_MESSAGE_MAP(CMainFrame, CMDIFrameWnd)
 	ON_WM_CREATE()
-//	ON_WM_DWMCOLORIZATIONCOLORCHANGED()
-ON_WM_DROPFILES()
-ON_WM_CLOSE()
+	ON_WM_DROPFILES()
+	ON_WM_CLOSE()
+	ON_MESSAGE(WM_CHECK_CHILD_FRAMES, &CMainFrame::OnCheckChildFrames)
 END_MESSAGE_MAP()
 
+//ID_SEPARATOR의 갯수는 .h에 정의된 enum status_id의 갯수와 일치해야 한다.
 static UINT indicators[] =
 {
 	ID_SEPARATOR,
 	ID_SEPARATOR,
 	ID_SEPARATOR,
-	ID_SEPARATOR,		//for zoom ratio
-	ID_INDICATOR_CAPS,
-	ID_INDICATOR_NUM,
-	ID_INDICATOR_SCRL,
+	ID_SEPARATOR,
+	ID_SEPARATOR,
 };
 
 // CMainFrame 생성/소멸
@@ -66,15 +66,16 @@ int CMainFrame::OnCreate(LPCREATESTRUCT lpCreateStruct)
 
 	// TODO: 도구 모음을 도킹할 수 없게 하려면 이 세 줄을 삭제하십시오.
 	m_wndToolBar.EnableDocking(CBRS_ALIGN_ANY);
-	m_wndStatusBar.SetPaneInfo(0, ID_SEPARATOR, SBPS_STRETCH, 240);
-	m_wndStatusBar.SetPaneInfo(1, ID_SEPARATOR, SBPS_NORMAL, 45);
-	m_wndStatusBar.SetPaneInfo(2, ID_SEPARATOR, SBPS_NORMAL, 45);
-	m_wndStatusBar.SetPaneInfo(3, ID_SEPARATOR, SBPS_NORMAL, 45);
+	m_wndStatusBar.SetPaneInfo(status_default, ID_SEPARATOR, SBPS_STRETCH, 240);
+	m_wndStatusBar.SetPaneInfo(status_image_info, ID_SEPARATOR, SBPS_NORMAL, 140);
+	m_wndStatusBar.SetPaneInfo(status_duration_info, ID_SEPARATOR, SBPS_NORMAL, 100);
+	m_wndStatusBar.SetPaneInfo(status_zoom_info, ID_SEPARATOR, SBPS_NORMAL, 45);
+	m_wndStatusBar.SetPaneInfo(status_selected_info, ID_SEPARATOR, SBPS_NORMAL, 45);
 
 	EnableDocking(CBRS_ALIGN_ANY);
 	DockControlBar(&m_wndToolBar);
 
-	//DragAcceptFiles();
+	DragAcceptFiles();
 
 	return 0;
 }
@@ -107,9 +108,34 @@ void CMainFrame::Dump(CDumpContext& dc) const
 // CMainFrame 메시지 처리기
 void CMainFrame::OnDropFiles(HDROP hDropInfo)
 {
-	// TODO: 여기에 메시지 처리기 코드를 추가 및/또는 기본값을 호출합니다.
+	UINT nFiles = DragQueryFile(hDropInfo, 0xFFFFFFFF, nullptr, 0);
 
-	CMDIFrameWnd::OnDropFiles(hDropInfo);
+	for (UINT i = 0; i < nFiles; ++i)
+	{
+		TCHAR szFileName[MAX_PATH];
+		DragQueryFile(hDropInfo, i, szFileName, MAX_PATH);
+
+		// DocTemplate을 통해 새 Doc/ChildFrame/View 생성
+		POSITION pos = AfxGetApp()->GetFirstDocTemplatePosition();
+		CDocTemplate* pTemplate = AfxGetApp()->GetNextDocTemplate(pos);
+		if (!pTemplate)
+			continue;
+
+		CDocument* pDoc = pTemplate->OpenDocumentFile(nullptr); // 빈 문서 생성
+		if (!pDoc)
+			continue;
+
+		// 새로 생성된 View 찾기
+		POSITION viewPos = pDoc->GetFirstViewPosition();
+		CView* pView = pDoc->GetNextView(viewPos);
+		CAniMakerView* pAniView = dynamic_cast<CAniMakerView*>(pView);
+		if (pAniView)
+		{
+			pAniView->load(szFileName);
+		}
+	}
+
+	DragFinish(hDropInfo);
 }
 
 BOOL CMainFrame::PreTranslateMessage(MSG* pMsg)
@@ -144,10 +170,72 @@ void CMainFrame::OnClose()
 	pApp->WriteProfileInt(_T("MainFrame"), _T("right"), wp.rcNormalPosition.right);
 	pApp->WriteProfileInt(_T("MainFrame"), _T("bottom"), wp.rcNormalPosition.bottom);
 
+	// ChildFrame 상태 저장 (메인 종료 시 OnClose가 호출되지 않으므로)
+	CMDIChildWnd* pChild = MDIGetActive();
+	if (pChild)
+	{
+		WINDOWPLACEMENT wpChild = { sizeof(WINDOWPLACEMENT) };
+		pChild->GetWindowPlacement(&wpChild);
+
+		pApp->WriteProfileInt(_T("ChildFrame"), _T("showCmd"), wpChild.showCmd);
+		pApp->WriteProfileInt(_T("ChildFrame"), _T("left"), wpChild.rcNormalPosition.left);
+		pApp->WriteProfileInt(_T("ChildFrame"), _T("top"), wpChild.rcNormalPosition.top);
+		pApp->WriteProfileInt(_T("ChildFrame"), _T("right"), wpChild.rcNormalPosition.right);
+		pApp->WriteProfileInt(_T("ChildFrame"), _T("bottom"), wpChild.rcNormalPosition.bottom);
+	}
+
 	CMDIFrameWnd::OnClose();
+}
+
+void CMainFrame::set_image_info(int total_frames, int width, int height)
+{
+	CString text;
+
+	if (total_frames > 0 && width > 0 && height > 0)
+		text.Format(_T("%d frames, %d x %d"), total_frames, width, height);
+	else
+		text = _T("No image loaded");
+
+	set_status_text(status_image_info, text);
+}
+
+void CMainFrame::set_duration_info(std::deque<int>& frame_delays)
+{
+	int total_ms = 0;
+
+	for (int delay : frame_delays)
+		total_ms += delay;
+
+	CString text;
+
+	text.Format(_T("total %.3f ms"), (double)total_ms / 1000.0f);
+	set_status_text(status_duration_info, text);
+}
+
+void CMainFrame::set_zoom_info(float zoom)
+{
+	CString text;
+	text.Format(_T("%d%%"), (int)(zoom * 100));
+	set_status_text(status_zoom_info, text);
 }
 
 void CMainFrame::set_status_text(int index, CString text)
 {
 	m_wndStatusBar.SetPaneText(index, text);
+}
+
+LRESULT CMainFrame::OnCheckChildFrames(WPARAM wParam, LPARAM lParam)
+{
+	CMDIChildWnd* pChild = MDIGetActive();
+
+	if (pChild == NULL)
+	{
+		// 더 이상 child frame이 없음 → status bar 초기화
+		set_image_info(0, 0, 0);
+		set_status_text(status_duration_info, _T(""));
+		set_status_text(status_zoom_info, _T(""));
+		set_status_text(status_selected_info, _T(""));
+	}
+
+	return 0;
 }

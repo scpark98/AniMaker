@@ -39,18 +39,30 @@ BOOL CChildFrame::PreCreateWindow(CREATESTRUCT& cs)
 		return FALSE;
 
 	// 저장된 ChildFrame 크기 복원
-	CWinApp* pApp = AfxGetApp();
-	int left = pApp->GetProfileInt(_T("ChildFrame"), _T("left"), CW_USEDEFAULT);
+	//CWinApp* pApp = AfxGetApp();
+	//int left = pApp->GetProfileInt(_T("ChildFrame"), _T("left"), CW_USEDEFAULT);
 
-	if (left != CW_USEDEFAULT)
-	{
-		cs.x = pApp->GetProfileInt(_T("ChildFrame"), _T("left"), 0);
-		cs.y = pApp->GetProfileInt(_T("ChildFrame"), _T("top"), 0);
-		cs.cx = pApp->GetProfileInt(_T("ChildFrame"), _T("right"), 0) - cs.x;
-		cs.cy = pApp->GetProfileInt(_T("ChildFrame"), _T("bottom"), 0) - cs.y;
-	}
+	//if (left != CW_USEDEFAULT)
+	//{
+	//	cs.x = pApp->GetProfileInt(_T("ChildFrame"), _T("left"), 0);
+	//	cs.y = pApp->GetProfileInt(_T("ChildFrame"), _T("top"), 0);
+	//	cs.cx = pApp->GetProfileInt(_T("ChildFrame"), _T("right"), 0) - cs.x;
+	//	cs.cy = pApp->GetProfileInt(_T("ChildFrame"), _T("bottom"), 0) - cs.y;
+	//}
 
 	return TRUE;
+}
+
+void CChildFrame::ActivateFrame(int nCmdShow)
+{
+	// 최초 활성화 시에만 저장된 showCmd를 적용
+	//if (m_first_activation)
+	//{
+	//	m_first_activation = false;
+	//	nCmdShow = AfxGetApp()->GetProfileInt(_T("ChildFrame"), _T("showCmd"), SW_SHOWNORMAL);
+	//}
+
+	CMDIChildWnd::ActivateFrame(nCmdShow);
 }
 
 // CChildFrame 진단
@@ -72,15 +84,21 @@ void CChildFrame::Dump(CDumpContext& dc) const
 void CChildFrame::OnClose()
 {
 	// TODO: 여기에 메시지 처리기 코드를 추가 및/또는 기본값을 호출합니다.
-	WINDOWPLACEMENT wp = { sizeof(WINDOWPLACEMENT) };
-	GetWindowPlacement(&wp);
+	//WINDOWPLACEMENT wp = { sizeof(WINDOWPLACEMENT) };
+	//GetWindowPlacement(&wp);
 
-	CWinApp* pApp = AfxGetApp();
-	pApp->WriteProfileInt(_T("ChildFrame"), _T("showCmd"), wp.showCmd);
-	pApp->WriteProfileInt(_T("ChildFrame"), _T("left"), wp.rcNormalPosition.left);
-	pApp->WriteProfileInt(_T("ChildFrame"), _T("top"), wp.rcNormalPosition.top);
-	pApp->WriteProfileInt(_T("ChildFrame"), _T("right"), wp.rcNormalPosition.right);
-	pApp->WriteProfileInt(_T("ChildFrame"), _T("bottom"), wp.rcNormalPosition.bottom);
+	//CWinApp* pApp = AfxGetApp();
+	//pApp->WriteProfileInt(_T("ChildFrame"), _T("showCmd"), wp.showCmd);
+	//pApp->WriteProfileInt(_T("ChildFrame"), _T("left"), wp.rcNormalPosition.left);
+	//pApp->WriteProfileInt(_T("ChildFrame"), _T("top"), wp.rcNormalPosition.top);
+	//pApp->WriteProfileInt(_T("ChildFrame"), _T("right"), wp.rcNormalPosition.right);
+	//pApp->WriteProfileInt(_T("ChildFrame"), _T("bottom"), wp.rcNormalPosition.bottom);
+
+	CWnd* pMainFrame = AfxGetApp()->m_pMainWnd;
 
 	CMDIChildWnd::OnClose();
+
+	// child frame 소멸 완료 후 처리되도록 Post
+	if (pMainFrame)
+		pMainFrame->PostMessage(WM_CHECK_CHILD_FRAMES);
 }

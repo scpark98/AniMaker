@@ -28,6 +28,9 @@ public:
 // 구현입니다.
 	afx_msg void OnAppAbout();
 	DECLARE_MESSAGE_MAP()
+	afx_msg void OnFileNew();
+	afx_msg void OnFileOpen();
+	afx_msg void OnFileClose();
 };
 
 extern CAniMakerApp theApp;

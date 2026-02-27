@@ -114,7 +114,25 @@ void CPreviewDlg::set_image(CSCD2Image* pImg)
 	//m_imgDlg가 생성될 때 만들어진 m_d2dc와 다를 것이다.
 	//따라서 set_image
 	//m_img = pImg;
+	m_imgDlg.stop();
 	m_imgDlg.set_image(pImg);
 	m_imgDlg.play();
 	//m_imgDlg.load(_T("D:\\share.webp"), false);
+}
+BOOL CPreviewDlg::PreTranslateMessage(MSG* pMsg)
+{
+	// TODO: 여기에 특수화된 코드를 추가 및/또는 기본 클래스를 호출합니다.
+	if (pMsg->message == WM_SYSKEYDOWN)
+	{
+		switch (pMsg->wParam)
+		{
+			case '1':
+				m_imgDlg.set_interpolation_mode(D2D1_BITMAP_INTERPOLATION_MODE_NEAREST_NEIGHBOR);
+				return TRUE;
+			case '2':
+				m_imgDlg.set_interpolation_mode(D2D1_BITMAP_INTERPOLATION_MODE_LINEAR);
+				return TRUE;
+		}
+	}
+	return CDialogEx::PreTranslateMessage(pMsg);
 }

@@ -1,5 +1,4 @@
-﻿
-// AniMakerView.h: CAniMakerView 클래스의 인터페이스
+﻿// AniMakerView.h: CAniMakerView 클래스의 인터페이스
 //
 
 #pragma once
@@ -9,6 +8,8 @@
 #include "Common/CDialog/SCShapeDlg/SCShapeDlg.h"
 
 #include "PreviewDlg.h"
+
+class CAniMakerDoc;
 
 class CAniMakerView : public CView
 {
@@ -22,6 +23,7 @@ public:
 
 // 작업입니다.
 public:
+	bool					load(CString path);
 
 private:
 	CSCD2Context			m_d2dc;
@@ -105,6 +107,8 @@ public:
 	afx_msg void OnMenuSaveFrameAs();
 	afx_msg void OnRButtonDown(UINT nFlags, CPoint point);
 	afx_msg void OnMenuViewAnimation();
+	afx_msg void OnMenuSaveAs();
+	virtual void OnActivateView(BOOL bActivate, CView* pActivateView, CView* pDeactiveView);
 };
 
 #ifndef _DEBUG  // AniMakerView.cpp의 디버그 버전

@@ -34,4 +34,8 @@ protected:
 	DECLARE_MESSAGE_MAP()
 public:
 	afx_msg void OnClose();
+	virtual void ActivateFrame(int nCmdShow = -1);
+
+private:
+	bool m_first_activation = true;
 };

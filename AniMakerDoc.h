@@ -14,6 +14,7 @@ protected: // serialization에서만 만들어집니다.
 
 // 특성입니다.
 public:
+	CString			m_file;
 
 // 작업입니다.
 public:
@@ -45,4 +46,6 @@ protected:
 	// 검색 처리기에 대한 검색 콘텐츠를 설정하는 도우미 함수
 	void SetSearchContent(const CString& value);
 #endif // SHARED_HANDLERS
+public:
+	virtual BOOL OnOpenDocument(LPCTSTR lpszPathName);
 };

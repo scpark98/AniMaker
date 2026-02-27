@@ -13,6 +13,7 @@
 #include "MainFrm.h"
 #include "AniMakerDoc.h"
 #include "AniMakerView.h"
+#include "FrameProperty.h"
 
 #ifdef _DEBUG
 #define new DEBUG_NEW
@@ -57,6 +58,7 @@ BEGIN_MESSAGE_MAP(CAniMakerView, CView)
 	ON_COMMAND(ID_MENU_SAVE_FRAME_AS, &CAniMakerView::OnMenuSaveFrameAs)
 	ON_WM_RBUTTONDOWN()
 	ON_COMMAND(ID_MENU_VIEW_ANIMATION, &CAniMakerView::OnMenuViewAnimation)
+	ON_COMMAND(ID_MENU_SAVE_AS, &CAniMakerView::OnMenuSaveAs)
 END_MESSAGE_MAP()
 
 // CAniMakerView 생성/소멸
@@ -119,23 +121,35 @@ void CAniMakerView::OnDraw(CDC* /*pDC*/)
 			ID2D1Bitmap1* pFrame = m_img.get_frame_img(i);
 			if (pFrame)
 			{
-				D2D1_RECT_F rc = D2D1::RectF(x, y, x + thumbW, y + thumbH);
+				D2D1_RECT_F rthumb = D2D1::RectF(x, y, x + thumbW, y + thumbH);
 
+				//alpha가 포함된 이미지라면 격자 패턴을 먼저 그려주고
 				if (m_img.get_alpha_pixel_count() > 0)
-					d2dc->FillRectangle(rc, m_d2dc.get_zigzag_brush().Get());
+				{
+					auto zigzag = m_d2dc.get_zigzag_brush();
+					float zigzag_size = m_d2dc.get_zigzag_size();
+					zigzag->SetTransform(D2D1::Matrix3x2F::Scale(zigzag_size, zigzag_size) * D2D1::Matrix3x2F::Translation(rthumb.left, rthumb.top));
+					d2dc->FillRectangle(rthumb, zigzag.Get());
+				}
 
-				d2dc->DrawBitmap(pFrame, rc);
-				draw_rect(d2dc, rc, Gdiplus::Color::LightGray, Gdiplus::Color::Transparent, 1.0f);
+				//이미지 표시
+				d2dc->DrawBitmap(pFrame, rthumb);
 
+				//이미지 영역에 옅은 회색 테두리 표시
+				draw_rect(d2dc, rthumb, Gdiplus::Color::LightGray, Gdiplus::Color::Transparent, 1.0f);
+
+				//frame index와 delay 표시
 				str.Format(_T("F:%d D:%d"), i, m_img.get_frame_delay(i));
-				D2D1_RECT_F rtext = rc;
-				rtext.top = rc.bottom + 8;
+				D2D1_RECT_F rtext = rthumb;
+				rtext.top = rthumb.bottom + 8;
 				rtext.bottom = rtext.top + 24;
 				draw_text(d2dc, rtext, str, _T("Arial"), 12.0f / m_zoom, FW_NORMAL, Gdiplus::Color::Black, Gdiplus::Color::LightGray, DT_CENTER | DT_TOP);
+
+				//선택항목이면 royalblue border로 표시한다.
 				if (std::find(m_selected.begin(), m_selected.end(), i) != m_selected.end())
 				{
-					inflate_rect(rc, 0, 0);
-					draw_rect(d2dc, rc, Gdiplus::Color::RoyalBlue, Gdiplus::Color::Transparent, 2.0f);
+					//inflate_rect(rthumb, 0, 0);
+					draw_rect(d2dc, rthumb, Gdiplus::Color::RoyalBlue, Gdiplus::Color::Transparent, 2.0f);
 				}
 			}
 			x += thumbW + m_thumb_gap;
@@ -201,7 +215,6 @@ void CAniMakerView::OnInitialUpdate()
 	if (!pDoc)
 		pDoc = GetDocument();
 
-	m_img.load(m_d2dc.get_WICFactory(), m_d2dc.get_d2dc(), _T("D:\\chart.gif"), false);
 	recalc_scrollbars();
 	Invalidate();
 
@@ -209,13 +222,15 @@ void CAniMakerView::OnInitialUpdate()
 	m_preview.set_shared_d2dc(&m_d2dc);
 	m_preview.Create(IDD_PREVIEW, this);
 
-
 	m_message.set_text(this, _T(""), 32, Gdiplus::FontStyleBold, 4.0f, 2.4f);
 	m_message.set_stroke_color(Gdiplus::Color::Black);
 	m_message.set_alpha(192);
 	m_message.use_control(false);
 
 	DragAcceptFiles();
+
+	if (pDoc && !pDoc->m_file.IsEmpty())
+		load(pDoc->m_file);
 }
 
 void CAniMakerView::OnUpdate(CView* /*pSender*/, LPARAM /*lHint*/, CObject* /*pHint*/)
@@ -332,17 +347,9 @@ void CAniMakerView::OnDropFiles(HDROP hDropInfo)
 	TCHAR szFileName[MAX_PATH];
 	DragQueryFile(hDropInfo, 0, szFileName, MAX_PATH);
 
-	// 현재 View/Doc에서 파일 처리
-	// 예: 이미지 로드, 프레임 추가 등
-	TRACE(_T("Dropped: %s\n"), szFileName);
-
-	m_img.load(m_d2dc.get_WICFactory(), m_d2dc.get_d2dc(), szFileName);
+	load(szFileName);
 
 	DragFinish(hDropInfo);
-	recalc_scrollbars();
-	Invalidate();  // 화면 갱신
-
-	//CView::OnDropFiles(hDropInfo);
 }
 
 BOOL CAniMakerView::OnEraseBkgnd(CDC* pDC)
@@ -697,6 +704,7 @@ void CAniMakerView::OnMenuPreview()
 	//동일한 D2D 팩토리/디바이스 공유 방식으로 구현해야 한다.
 	//복잡하므로 우선 m_img를 외부파일로 저장하고 이를 m_preview에서 읽어서 재생하는 방식으로 구현한다.
 	//m_img.save_webp(_T("D:\\share.webp"));
+	//=>202602 동일한 D2D 팩토리/디바이스 공유 방식으로 구현 완료.
 	m_preview.set_image(&m_img);
 
 	if (m_preview.IsIconic())
@@ -760,11 +768,25 @@ void CAniMakerView::OnMenuDelete()
 	if (m_selected.size() == 0)
 		return;
 
+	// 선택된 프레임들을 뒤에서부터 삭제 (인덱스가 밀리는 것을 방지하기 위해)
+	for (int i = m_selected.size() - 1; i >= 0; i--)
+	{
+		m_img.get_img_list()->erase(m_img.get_img_list()->begin() + m_selected[i]);
+		m_img.get_frame_delay_list()->erase(m_img.get_frame_delay_list()->begin() + m_selected[i]);
+	}
 
+	((CMainFrame*)(AfxGetApp()->m_pMainWnd))->set_image_info(m_img.get_frame_count(), m_img.get_width(), m_img.get_height());
+	((CMainFrame*)(AfxGetApp()->m_pMainWnd))->set_duration_info(*m_img.get_frame_delay_list());
+
+	//선택 항목들이 삭제되면 선택 정보 또한 clear 시켜야 한다.
+	m_selected.clear();
 
 	recalc_scrollbars();
 
 	Invalidate();
+
+	if (m_preview.IsWindowVisible())
+		m_preview.set_image(&m_img);
 }
 
 void CAniMakerView::OnMenuDuplicateSelected()
@@ -783,9 +805,25 @@ void CAniMakerView::OnMenuDuplicateSelected()
 	D2D1_RECT_U r = { 0, 0, m_img.get_width(), m_img.get_height() };
 	frame_img.get_frame_img(0)->CopyFromBitmap(&pt, m_img.get_frame_img(m_selected[0]), &r);
 	m_img.get_img_list()->insert(m_img.get_img_list()->begin() + m_selected[0], std::move(frame_img.get_frame_img(0)));
-	m_img.get_frame_delay_list()->insert(m_img.get_frame_delay_list()->begin() + m_selected[0], 1234);
+
+	//gif, webp와 같은 animated image가 아닌 경우는 m_frame_delay가 처음부터 존재하지 않으므로
+	//기본값으로 넣어줘야 한다.
+	int src_frame_delay = m_img.get_frame_delay(m_selected[0]);
+	if (src_frame_delay <= 0)
+	{
+		src_frame_delay = 30;
+		m_img.set_frame_delay(m_selected[0], src_frame_delay);
+	}
+
+	m_img.get_frame_delay_list()->insert(m_img.get_frame_delay_list()->begin() + m_selected[0], src_frame_delay);
+
+	((CMainFrame*)(AfxGetApp()->m_pMainWnd))->set_image_info(m_img.get_frame_count(), m_img.get_width(), m_img.get_height());
+	((CMainFrame*)(AfxGetApp()->m_pMainWnd))->set_duration_info(*m_img.get_frame_delay_list());
 
 	recalc_scrollbars();
+
+	if (m_preview.IsWindowVisible())
+		m_preview.set_image(&m_img);
 
 	Invalidate();
 }
@@ -797,21 +835,150 @@ void CAniMakerView::OnMenuInsertFrameFromFile()
 
 void CAniMakerView::OnMenuInsertFrameEmpty()
 {
-	// TODO: 여기에 명령 처리기 코드를 추가합니다.
+	if (m_selected.size() != 1)
+	{
+		show_message(_T("빈 프레임 추가 기능은 하나의 프레임을 선택했을때만 가능합니다."));
+		return;
+	}
+
+	CSCD2Image frame_img;
+
+	frame_img.create(m_img.get_WICFactory2(), m_img.get_d2dc(), m_img.get_width(), m_img.get_height());
+
+	//D2D1_POINT_2U pt = { 0, 0 };
+	//D2D1_RECT_U r = { 0, 0, m_img.get_width(), m_img.get_height() };
+	//frame_img.get_frame_img(0)->CopyFromBitmap(&pt, m_img.get_frame_img(m_selected[0]), &r);
+	m_img.get_img_list()->insert(m_img.get_img_list()->begin() + m_selected[0], std::move(frame_img.get_frame_img(0)));
+	m_img.get_frame_delay_list()->insert(m_img.get_frame_delay_list()->begin() + m_selected[0], m_img.get_frame_delay(m_selected[0]));
+
+	((CMainFrame*)(AfxGetApp()->m_pMainWnd))->set_image_info(m_img.get_frame_count(), m_img.get_width(), m_img.get_height());
+	((CMainFrame*)(AfxGetApp()->m_pMainWnd))->set_duration_info(*m_img.get_frame_delay_list());
+
+	recalc_scrollbars();
+
+	if (m_preview.IsWindowVisible())
+		m_preview.set_image(&m_img);
+
+	Invalidate();
 }
 
 void CAniMakerView::OnMenuFrameProperty()
 {
-	// TODO: 여기에 명령 처리기 코드를 추가합니다.
+	if (m_selected.size() == 0)
+		return;
+
+	CFrameProperty	dlg;
+	dlg.m_frame_delay = m_img.get_frame_delay_list()->at(m_selected[0]);
+
+	if (dlg.DoModal() == IDCANCEL)
+		return;
+
+	int new_delay = dlg.m_frame_delay;
+
+	for (auto selected : m_selected)
+		m_img.set_frame_delay(selected, new_delay);
+	
+	((CMainFrame*)(AfxGetApp()->m_pMainWnd))->set_duration_info(*m_img.get_frame_delay_list());
+
+	Invalidate();
+
+	if (m_preview.IsWindowVisible())
+		m_preview.set_image(&m_img);
 }
 
 void CAniMakerView::OnMenuSaveFrameAs()
 {
-	// TODO: 여기에 명령 처리기 코드를 추가합니다.
+	if (m_selected.size() > 1)
+	{
+		int res = AfxMessageBox(_T("멀티 선택 시 프레임 저장 기능은 맨 처음 선택된 프레임만 저장합니다."), MB_OKCANCEL | MB_ICONEXCLAMATION);
+		if (res == IDCANCEL)
+			return;
+	}
+
+	CString recent = theApp.GetProfileString(_T("setting"), _T("recent saved frame file"), _T(""));
+	CFileDialog dlg(FALSE, _T("png"), recent, OFN_HIDEREADONLY | OFN_OVERWRITEPROMPT, _T("PNG Files (*.png)|*.png|All Files (*.*)|*.*||"));
+
+	if (dlg.DoModal() == IDCANCEL)
+		return;
+
+	recent = dlg.GetPathName();
+	theApp.WriteProfileString(_T("setting"), _T("recent saved frame file"), recent);
+	m_img.save(m_img.get_frame_img(m_selected[0]), 1.0f, recent);
 }
 
 
 void CAniMakerView::OnMenuViewAnimation()
 {
 	OnMenuPreview();
+}
+
+void CAniMakerView::OnMenuSaveAs()
+{
+	CString path = m_img.get_filename();
+
+	if (path.IsEmpty())
+		path = get_exe_directory(true) + _T("untitled.webp");
+
+	CString recent = theApp.GetProfileString(_T("setting"), _T("recent saved file"), _T(""));
+	CFileDialog dlg(FALSE, _T("*"), recent, OFN_HIDEREADONLY | OFN_OVERWRITEPROMPT, _T("WebP Files (*.webp)|*.webp|Gif Files (*.gif)|*.gif||"));
+
+	if (dlg.DoModal() == IDCANCEL)
+		return;
+
+	recent = dlg.GetPathName();
+	theApp.WriteProfileString(_T("setting"), _T("recent saved file"), recent);
+
+	if (dlg.GetFileExt().CompareNoCase(_T("gif")) == 0)
+		m_img.save_gif(recent);
+	else if (dlg.GetFileExt().CompareNoCase(_T("webp")) == 0)
+		m_img.save_webp(recent);
+	else
+	{
+		AfxMessageBox(_T("지원하지 않는 파일 형식입니다."));
+	}
+}
+
+bool CAniMakerView::load(CString path)
+{
+	m_img.load(m_d2dc.get_WICFactory(), m_d2dc.get_d2dc(), path);
+
+	if (!pDoc)
+		pDoc = GetDocument();
+
+	pDoc->SetTitle(m_img.get_filename());
+
+	CMainFrame* pMain = (CMainFrame*)(AfxGetApp()->m_pMainWnd);
+	pMain->set_image_info(m_img.get_frame_count(), (int)m_img.get_width(), (int)m_img.get_height());
+	pMain->set_duration_info(*m_img.get_frame_delay_list());
+
+	recalc_scrollbars();
+	Invalidate();
+
+	return true;
+}
+
+void CAniMakerView::OnActivateView(BOOL bActivate, CView* pActivateView, CView* pDeactiveView)
+{
+	CView::OnActivateView(bActivate, pActivateView, pDeactiveView);
+
+	if (!bActivate)
+		return;
+
+	// 활성화된 View의 이미지 정보를 status bar에 반영
+	CMainFrame* pMain = (CMainFrame*)(AfxGetApp()->m_pMainWnd);
+	if (!pMain)
+		return;
+
+	if (m_img.is_valid())
+	{
+		pMain->set_image_info(m_img.get_frame_count(), (int)m_img.get_width(), (int)m_img.get_height());
+		pMain->set_duration_info(*m_img.get_frame_delay_list());
+	}
+	else
+	{
+		pMain->set_image_info(0, 0, 0);
+		pMain->set_status_text(status_duration_info, _T(""));
+	}
+
+	pMain->set_zoom_info(m_zoom);
 }

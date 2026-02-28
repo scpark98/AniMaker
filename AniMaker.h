@@ -14,7 +14,7 @@
 // 이 클래스의 구현에 대해서는 AniMaker.cpp을(를) 참조하세요.
 //
 
-class CAniMakerApp : public CWinApp
+class CAniMakerApp : public CWinAppEx
 {
 public:
 	CAniMakerApp() noexcept;

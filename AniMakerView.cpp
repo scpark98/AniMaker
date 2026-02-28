@@ -69,6 +69,8 @@ BEGIN_MESSAGE_MAP(CAniMakerView, CView)
 	ON_COMMAND(ID_EDIT_REDO, &CAniMakerView::OnEditRedo)
 	ON_UPDATE_COMMAND_UI(ID_EDIT_UNDO, &CAniMakerView::OnUpdateEditUndo)
 	ON_UPDATE_COMMAND_UI(ID_EDIT_REDO, &CAniMakerView::OnUpdateEditRedo)
+	ON_COMMAND(ID_MENU_ZOOM_50, &CAniMakerView::OnMenuZoom50)
+	ON_COMMAND(ID_MENU_ZOOM_100, &CAniMakerView::OnMenuZoom100)
 END_MESSAGE_MAP()
 
 // CAniMakerView 생성/소멸
@@ -138,7 +140,7 @@ void CAniMakerView::OnDraw(CDC* /*pDC*/)
 				{
 					auto zigzag = m_d2dc.get_zigzag_brush();
 					float zigzag_size = m_d2dc.get_zigzag_size();
-					zigzag->SetTransform(D2D1::Matrix3x2F::Scale(zigzag_size, zigzag_size) * D2D1::Matrix3x2F::Translation(rthumb.left, rthumb.top));
+					zigzag->SetTransform(D2D1::Matrix3x2F::Scale(zigzag_size / m_zoom, zigzag_size / m_zoom) * D2D1::Matrix3x2F::Translation(rthumb.left, rthumb.top));
 					d2dc->FillRectangle(rthumb, zigzag.Get());
 				}
 
@@ -159,14 +161,30 @@ void CAniMakerView::OnDraw(CDC* /*pDC*/)
 				if (std::find(m_selected.begin(), m_selected.end(), i) != m_selected.end())
 				{
 					//inflate_rect(rthumb, 0, 0);
-					draw_rect(d2dc, rthumb, Gdiplus::Color::RoyalBlue, Gdiplus::Color::Transparent, 2.0f);
+					draw_rect(d2dc, rthumb, Gdiplus::Color::RoyalBlue, Gdiplus::Color::Transparent, 4.0f / m_zoom);
 				}
 			}
-			x += thumbW + m_thumb_gap;
+			x += thumbW + m_thumb_gap / m_zoom;
 		}
 	}
 
 	d2dc->SetTransform(D2D1::Matrix3x2F::Identity());
+
+	//드래그 선택 중이면 rubber band 표시
+	if (m_bDragSelecting)
+	{
+		D2D1_RECT_F dragRect = D2D1::RectF(
+			(float)min(m_ptDragStart.x, m_ptDragCurrent.x),
+			(float)min(m_ptDragStart.y, m_ptDragCurrent.y),
+			(float)max(m_ptDragStart.x, m_ptDragCurrent.x),
+			(float)max(m_ptDragStart.y, m_ptDragCurrent.y));
+
+		//반투명 채우기 + 테두리 (Windows 탐색기 스타일)
+		draw_rect(d2dc, dragRect,
+			Gdiplus::Color(180, 65, 105, 225),	//테두리: RoyalBlue
+			Gdiplus::Color(40, 65, 105, 225),	//채우기: 반투명 RoyalBlue
+			1.0f);
+	}
 
 	HRESULT hr = d2dc->EndDraw();
 
@@ -228,6 +246,7 @@ void CAniMakerView::OnInitialUpdate()
 	recalc_scrollbars();
 	Invalidate();
 
+	//preview 창은 각 view마다 생성된다. mainframe의 공통 child가 아닌 각 view마다 생성된다.
 	// Preview에 D2D 디바이스 공유 설정 (create 전에 호출)
 	m_preview.set_shared_d2dc(&m_d2dc);
 	m_preview.Create(IDD_PREVIEW, this);
@@ -421,24 +440,71 @@ void CAniMakerView::OnLButtonDown(UINT nFlags, CPoint point)
 {
 	int index = get_frame_index(point);
 
-	//일단 프레임이 아닌 영역을 클릭하면 아무 동작도 하지 않는다.
-	if (index < 0)
-		return;
-
-	//Ctrl 키가 눌린 상태에서 클릭하면 다중 선택/해제
-	if (IsCtrlPressed())
+	if (index >= 0)
 	{
-		auto it = std::find(m_selected.begin(), m_selected.end(), index);
-		if (it != m_selected.end())
-			m_selected.erase(it);  // 이미 선택된 프레임이면 선택 해제
+		if (IsCtrlPressed() && IsShiftPressed())
+		{
+			//Ctrl+Shift+클릭: 앵커~클릭 범위를 기존 선택에 추가
+			if (m_anchor_index >= 0)
+			{
+				int start = min(m_anchor_index, index);
+				int end = max(m_anchor_index, index);
+				for (int i = start; i <= end; i++)
+				{
+					if (std::find(m_selected.begin(), m_selected.end(), i) == m_selected.end())
+						m_selected.push_back(i);
+				}
+			}
+			//앵커는 유지
+		}
+		else if (IsShiftPressed())
+		{
+			//Shift+클릭: 앵커~클릭 범위 선택 (기존 선택 대체)
+			if (m_anchor_index >= 0)
+			{
+				int start = min(m_anchor_index, index);
+				int end = max(m_anchor_index, index);
+				m_selected.clear();
+				for (int i = start; i <= end; i++)
+					m_selected.push_back(i);
+			}
+			else
+			{
+				m_selected.clear();
+				m_selected.push_back(index);
+				m_anchor_index = index;
+			}
+			//앵커는 유지
+		}
+		else if (IsCtrlPressed())
+		{
+			//Ctrl+클릭: 개별 토글
+			auto it = std::find(m_selected.begin(), m_selected.end(), index);
+			if (it != m_selected.end())
+				m_selected.erase(it);
+			else
+				m_selected.push_back(index);
+			m_anchor_index = index;
+		}
 		else
-			m_selected.push_back(index);  // 선택되지 않은 프레임이면 선택 추가
+		{
+			//일반 클릭: 단일 선택
+			m_selected.clear();
+			m_selected.push_back(index);
+			m_anchor_index = index;
+		}
 	}
 	else
 	{
-		m_selected.clear();
-		if (index >= 0)
-			m_selected.push_back(index);
+		//빈 영역 클릭 → 드래그 선택 시작
+		if (!IsCtrlPressed())
+			m_selected.clear();
+
+		m_selected_before_drag = m_selected;
+		m_bDragSelecting = true;
+		m_ptDragStart = point;
+		m_ptDragCurrent = point;
+		SetCapture();
 	}
 
 	Invalidate();
@@ -449,6 +515,13 @@ void CAniMakerView::OnLButtonDown(UINT nFlags, CPoint point)
 void CAniMakerView::OnLButtonUp(UINT nFlags, CPoint point)
 {
 	// TODO: 여기에 메시지 처리기 코드를 추가 및/또는 기본값을 호출합니다.
+	if (m_bDragSelecting)
+	{
+		m_bDragSelecting = false;
+		ReleaseCapture();
+		m_selected_before_drag.clear();
+		Invalidate();
+	}
 
 	CView::OnLButtonUp(nFlags, point);
 }
@@ -456,6 +529,30 @@ void CAniMakerView::OnLButtonUp(UINT nFlags, CPoint point)
 void CAniMakerView::OnMouseMove(UINT nFlags, CPoint point)
 {
 	// TODO: 여기에 메시지 처리기 코드를 추가 및/또는 기본값을 호출합니다.
+	if (m_bDragSelecting)
+	{
+		m_ptDragCurrent = point;
+
+		//screen → world 좌표로 변환한 드래그 영역
+		float x1 = m_ptDragStart.x / m_zoom + m_pt_scroll.x;
+		float y1 = m_ptDragStart.y / m_zoom + m_pt_scroll.y;
+		float x2 = m_ptDragCurrent.x / m_zoom + m_pt_scroll.x;
+		float y2 = m_ptDragCurrent.y / m_zoom + m_pt_scroll.y;
+
+		D2D1_RECT_F dragRect = D2D1::RectF(
+			min(x1, x2), min(y1, y2),
+			max(x1, x2), max(y1, y2));
+
+		//Ctrl+드래그이면 이전 선택 상태에서 시작
+		if (IsCtrlPressed())
+			m_selected = m_selected_before_drag;
+		else
+			m_selected.clear();
+
+		get_frames_in_rect(dragRect, m_selected);
+
+		Invalidate();
+	}
 
 	CView::OnMouseMove(nFlags, point);
 }
@@ -690,6 +787,32 @@ int	CAniMakerView::get_frame_index(CPoint pt)
 	return index;
 }
 
+void CAniMakerView::get_frames_in_rect(D2D1_RECT_F rectWorld, std::deque<int>& result)
+{
+	int nFrames = m_img.get_frame_count();
+	if (nFrames <= 0 || !m_img.is_valid())
+		return;
+
+	float imgH = m_img.get_height();
+	float thumbH = m_sz_thumb;
+	float thumbW = (imgH > 0.f) ? (m_img.get_width() / imgH * thumbH) : thumbH;
+	float frame_step = thumbW + m_thumb_gap;
+
+	for (int i = 0; i < nFrames; i++)
+	{
+		float x = m_thumb_margin + i * frame_step;
+		float y = m_thumb_margin;
+
+		//프레임 사각형과 드래그 사각형의 교차 판정
+		if (x + thumbW > rectWorld.left && x < rectWorld.right &&
+			y + thumbH > rectWorld.top && y < rectWorld.bottom)
+		{
+			if (std::find(result.begin(), result.end(), i) == result.end())
+				result.push_back(i);
+		}
+	}
+}
+
 void CAniMakerView::ensure_frame_visible(int index)
 {
 	int nFrames = m_img.get_frame_count();
@@ -842,8 +965,7 @@ void CAniMakerView::OnMenuPasteIntoSelectedFrame()
 
 	Invalidate();
 
-	if (m_preview.IsWindowVisible())
-		m_preview.set_image(&m_img);
+	apply_to_preview();
 
 	push_undo(std::move(action));
 	update_ui_after_edit();
@@ -879,8 +1001,7 @@ void CAniMakerView::OnMenuPasteBeforeCurrentFrame()
 
 	recalc_scrollbars();
 
-	if (m_preview.IsWindowVisible())
-		m_preview.set_image(&m_img);
+	apply_to_preview();
 
 	Invalidate();
 }
@@ -921,8 +1042,7 @@ void CAniMakerView::OnMenuPasteAfterCurrentFrame()
 
 	recalc_scrollbars();
 
-	if (m_preview.IsWindowVisible())
-		m_preview.set_image(&m_img);
+	apply_to_preview();
 
 	Invalidate();
 
@@ -965,8 +1085,7 @@ void CAniMakerView::OnMenuDelete()
 
 	Invalidate();
 
-	if (m_preview.IsWindowVisible())
-		m_preview.set_image(&m_img);
+	apply_to_preview();
 }
 
 void CAniMakerView::OnMenuDuplicateSelected()
@@ -1002,8 +1121,7 @@ void CAniMakerView::OnMenuDuplicateSelected()
 
 	recalc_scrollbars();
 
-	if (m_preview.IsWindowVisible())
-		m_preview.set_image(&m_img);
+	apply_to_preview();
 
 	Invalidate();
 }
@@ -1087,8 +1205,7 @@ void CAniMakerView::OnMenuInsertFrameFromFile()
 
 	recalc_scrollbars();
 
-	if (m_preview.IsWindowVisible())
-		m_preview.set_image(&m_img);
+	apply_to_preview();
 
 	Invalidate();
 }
@@ -1116,8 +1233,7 @@ void CAniMakerView::OnMenuInsertFrameEmpty()
 
 	recalc_scrollbars();
 
-	if (m_preview.IsWindowVisible())
-		m_preview.set_image(&m_img);
+	apply_to_preview();
 
 	Invalidate();
 }
@@ -1142,8 +1258,7 @@ void CAniMakerView::OnMenuFrameProperty()
 
 	Invalidate();
 
-	if (m_preview.IsWindowVisible())
-		m_preview.set_image(&m_img);
+	apply_to_preview();
 }
 
 void CAniMakerView::OnMenuSaveFrameAs()
@@ -1205,8 +1320,14 @@ bool CAniMakerView::load(CString path)
 	if (!pDoc)
 		pDoc = GetDocument();
 
+	//zoom 1.0 = 실제 이미지 크기가 되도록 썸네일 크기를 이미지 높이로 설정
+	if (m_img.is_valid() && m_img.get_height() > 0)
+		m_sz_thumb = (float)m_img.get_height();
+
 	pDoc->SetTitle(m_img.get_filename());
 	theApp.AddToRecentFileList(path);
+
+	m_preview.set_title(m_img.get_filename());
 
 	CMainFrame* pMain = (CMainFrame*)(AfxGetApp()->m_pMainWnd);
 	pMain->set_image_info(m_img.get_frame_count(), (int)m_img.get_width(), (int)m_img.get_height());
@@ -1291,8 +1412,7 @@ void CAniMakerView::update_ui_after_edit()
 
 	recalc_scrollbars();
 
-	if (m_preview.IsWindowVisible())
-		m_preview.set_image(&m_img);
+	apply_to_preview();
 
 	Invalidate();
 }
@@ -1493,4 +1613,28 @@ void CAniMakerView::OnUpdateEditUndo(CCmdUI* pCmdUI)
 void CAniMakerView::OnUpdateEditRedo(CCmdUI* pCmdUI)
 {
 	pCmdUI->Enable(!m_redo_stack.empty());
+}
+
+//이미지 정보 또는 frame 정보가 변경되면 즉시 preview창에 적용시킨다.
+//단, preview 창이 열려있는 않으면 굳이 매번 적용시킬 필요는 없다.
+void CAniMakerView::apply_to_preview()
+{
+	if (m_preview.IsWindowVisible())
+		m_preview.set_image(&m_img);
+}
+
+void CAniMakerView::OnMenuZoom50()
+{
+	m_zoom = 0.5f;
+	recalc_scrollbars();
+	Invalidate();
+	((CMainFrame*)(AfxGetApp()->m_pMainWnd))->set_zoom_info(m_zoom);
+}
+
+void CAniMakerView::OnMenuZoom100()
+{
+	m_zoom = 1.0f;
+	recalc_scrollbars();
+	Invalidate();
+	((CMainFrame*)(AfxGetApp()->m_pMainWnd))->set_zoom_info(m_zoom);
 }

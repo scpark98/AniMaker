@@ -16,7 +16,7 @@ enum status_id
 	status_selected_info,	//selected info
 };
 
-class CMainFrame : public CMDIFrameWnd
+class CMainFrame : public CMDIFrameWndEx
 {
 	DECLARE_DYNAMIC(CMainFrame)
 public:
@@ -45,8 +45,8 @@ public:
 #endif
 
 protected:  // 컨트롤 모음이 포함된 멤버입니다.
-	CToolBar          m_wndToolBar;
-	CStatusBar        m_wndStatusBar;
+	CMFCToolBar          m_wndToolBar;
+	CMFCStatusBar        m_wndStatusBar;
 
 // 생성된 메시지 맵 함수
 protected:

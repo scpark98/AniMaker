@@ -20,10 +20,10 @@
 
 // CAniMakerApp
 
-BEGIN_MESSAGE_MAP(CAniMakerApp, CWinApp)
+BEGIN_MESSAGE_MAP(CAniMakerApp, CWinAppEx)
 	ON_COMMAND(ID_APP_ABOUT, &CAniMakerApp::OnAppAbout)
 	// 표준 인쇄 설정 명령입니다.
-	ON_COMMAND(ID_FILE_PRINT_SETUP, &CWinApp::OnFilePrintSetup)
+	ON_COMMAND(ID_FILE_PRINT_SETUP, &CWinAppEx::OnFilePrintSetup)
 	ON_COMMAND(ID_FILE_NEW, &CAniMakerApp::OnFileNew)
 	ON_COMMAND(ID_FILE_OPEN, &CAniMakerApp::OnFileOpen)
 	ON_COMMAND(ID_FILE_CLOSE, &CAniMakerApp::OnFileClose)
@@ -52,18 +52,12 @@ CAniMakerApp theApp;
 
 BOOL CAniMakerApp::InitInstance()
 {
-	// 애플리케이션 매니페스트가 ComCtl32.dll 버전 6 이상을 사용하여 비주얼 스타일을
-	// 사용하도록 지정하는 경우, Windows XP 상에서 반드시 InitCommonControlsEx()가 필요합니다. 
-	// InitCommonControlsEx()를 사용하지 않으면 창을 만들 수 없습니다.
 	INITCOMMONCONTROLSEX InitCtrls;
 	InitCtrls.dwSize = sizeof(InitCtrls);
-	// 응용 프로그램에서 사용할 모든 공용 컨트롤 클래스를 포함하도록
-	// 이 항목을 설정하십시오.
 	InitCtrls.dwICC = ICC_WIN95_CLASSES;
 	InitCommonControlsEx(&InitCtrls);
 
-	CWinApp::InitInstance();
-
+	CWinAppEx::InitInstance();
 
 	// OLE 라이브러리를 초기화합니다.
 	if (!AfxOleInit())
@@ -73,21 +67,21 @@ BOOL CAniMakerApp::InitInstance()
 	}
 
 	AfxEnableControlContainer();
-
 	EnableTaskbarInteraction(FALSE);
 
-	// RichEdit 컨트롤을 사용하려면 AfxInitRichEdit2()가 있어야 합니다.
-	// AfxInitRichEdit2();
-
-	// 표준 초기화
-	// 이들 기능을 사용하지 않고 최종 실행 파일의 크기를 줄이려면
-	// 아래에서 필요 없는 특정 초기화
-	// 루틴을 제거해야 합니다.
-	// 해당 설정이 저장된 레지스트리 키를 변경하십시오.
-	// TODO: 이 문자열을 회사 또는 조직의 이름과 같은
-	// 적절한 내용으로 수정해야 합니다.
 	SetRegistryKey(_T("Legends Software"));
 	LoadStdProfileSettings(16);  // MRU를 포함하여 표준 INI 파일 옵션을 로드합니다.
+
+	// ★ CMFCToolBar 커스터마이징 지원 (선택)
+	InitContextMenuManager();
+	InitKeyboardManager();
+	InitTooltipManager();
+	CMFCToolTipInfo ttParams;
+	ttParams.m_bVislManagerTheme = TRUE;
+	theApp.GetTooltipManager()->SetTooltipParams(
+		AFX_TOOLTIP_TYPE_ALL, RUNTIME_CLASS(CMFCToolTipCtrl), &ttParams);
+
+
 
 	CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);	//COINIT_MULTITHREADED를 사용하면 프로그램 종료 시 런타임 에러 발생함.
 
@@ -152,7 +146,7 @@ int CAniMakerApp::ExitInstance()
 	//TODO: 추가한 추가 리소스를 처리합니다.
 	AfxOleTerm(FALSE);
 
-	return CWinApp::ExitInstance();
+	return CWinAppEx::ExitInstance();
 }
 
 // CAniMakerApp 메시지 처리기

@@ -59,7 +59,7 @@ private:
 	D2D1_POINT_2F			m_pt_scroll = D2D1::Point2F(0.f, 0.f);
 
 	float					m_sz_thumb = 100.f;
-	float					m_thumb_gap = 8.f;
+	float					m_thumb_gap = 12.f;
 	float					m_thumb_margin = 12.f;
 	float					m_zoom_max = 8.f;
 	float					m_zoom_min = 0.4f;
@@ -71,7 +71,15 @@ private:
 
 	//선택된 인덱스
 	std::deque<int>			m_selected;
+	int						m_anchor_index = -1;	//Shift+클릭 범위 선택용 앵커
 	int						get_frame_index(CPoint pt);
+	void					get_frames_in_rect(D2D1_RECT_F rectWorld, std::deque<int>& result);
+
+	//드래그 선택 (rubber band)
+	bool					m_bDragSelecting = false;
+	CPoint					m_ptDragStart;
+	CPoint					m_ptDragCurrent;
+	std::deque<int>			m_selected_before_drag;
 
 	//내부 복사/붙여넣기용 프레임 저장
 	std::deque<ComPtr<ID2D1Bitmap1>> m_copied_frames;
@@ -91,6 +99,9 @@ private:
 
 	CSCShapeDlg				m_message;
 	void					show_message(CString message);
+
+	//이미지 정보 또는 frame 정보가 변경되면 즉시 preview창에 적용
+	void					apply_to_preview();
 
 // 재정의입니다.
 public:
@@ -159,6 +170,8 @@ public:
 	afx_msg void OnUpdateEditCopy(CCmdUI* pCmdUI);
 	afx_msg void OnUpdateEditPaste(CCmdUI* pCmdUI);
 
+	afx_msg void OnMenuZoom50();
+	afx_msg void OnMenuZoom100();
 };
 
 #ifndef _DEBUG  // AniMakerView.cpp의 디버그 버전

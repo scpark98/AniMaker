@@ -15,6 +15,7 @@ class CPreviewDlg : public CDialogEx
 
 	void			set_shared_d2dc(CSCD2Context* pShared); 
 	void			set_image(CSCD2Image* pImg);
+	void			set_title(CString title);
 
 protected:
 	CSCD2Image*		m_img;

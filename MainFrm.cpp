@@ -15,9 +15,9 @@
 
 // CMainFrame
 
-IMPLEMENT_DYNAMIC(CMainFrame, CMDIFrameWnd)
+IMPLEMENT_DYNAMIC(CMainFrame, CMDIFrameWndEx)
 
-BEGIN_MESSAGE_MAP(CMainFrame, CMDIFrameWnd)
+BEGIN_MESSAGE_MAP(CMainFrame, CMDIFrameWndEx)
 	ON_WM_CREATE()
 	ON_WM_DROPFILES()
 	ON_WM_CLOSE()
@@ -47,21 +47,30 @@ CMainFrame::~CMainFrame()
 
 int CMainFrame::OnCreate(LPCREATESTRUCT lpCreateStruct)
 {
-	if (CMDIFrameWnd::OnCreate(lpCreateStruct) == -1)
+	if (CMDIFrameWndEx::OnCreate(lpCreateStruct) == -1)
 		return -1;
 
-	if (!m_wndToolBar.CreateEx(this, TBSTYLE_FLAT, WS_CHILD | WS_VISIBLE | CBRS_TOP | CBRS_GRIPPER | CBRS_TOOLTIPS | CBRS_FLYBY | CBRS_SIZE_DYNAMIC) ||
+	// ★ 비주얼 스타일 설정 (원하는 테마 선택)
+	CMFCVisualManager::SetDefaultManager(RUNTIME_CLASS(CMFCVisualManagerWindows));
+	// 다른 옵션: CMFCVisualManagerVS2008, CMFCVisualManagerWindows, etc.
+
+	// ★ CMFCToolBar 생성
+	if (!m_wndToolBar.CreateEx(this,
+		TBSTYLE_FLAT,
+		WS_CHILD | WS_VISIBLE | CBRS_TOP | CBRS_GRIPPER | CBRS_TOOLTIPS | CBRS_FLYBY | CBRS_SIZE_DYNAMIC) ||
 		!m_wndToolBar.LoadToolBar(IDR_MAINFRAME))
 	{
 		TRACE0("도구 모음을 만들지 못했습니다.\n");
-		return -1;      // 만들지 못했습니다.
+		return -1;
 	}
 
+	// ★ CMFCStatusBar 생성
 	if (!m_wndStatusBar.Create(this))
 	{
 		TRACE0("상태 표시줄을 만들지 못했습니다.\n");
-		return -1;      // 만들지 못했습니다.
+		return -1;
 	}
+
 	m_wndStatusBar.SetIndicators(indicators, sizeof(indicators)/sizeof(UINT));
 
 	// TODO: 도구 모음을 도킹할 수 없게 하려면 이 세 줄을 삭제하십시오.
@@ -72,17 +81,24 @@ int CMainFrame::OnCreate(LPCREATESTRUCT lpCreateStruct)
 	m_wndStatusBar.SetPaneInfo(status_zoom_info, ID_SEPARATOR, SBPS_NORMAL, 45);
 	m_wndStatusBar.SetPaneInfo(status_selected_info, ID_SEPARATOR, SBPS_NORMAL, 45);
 
+	// ★ 도킹 활성화 (CMFCToolBar 방식)
+	m_wndToolBar.EnableDocking(CBRS_ALIGN_ANY);
 	EnableDocking(CBRS_ALIGN_ANY);
-	DockControlBar(&m_wndToolBar);
+	DockPane(&m_wndToolBar);  // DockControlBar → DockPane
 
-	DragAcceptFiles();
+	// 툴바 커스터마이징 비활성화 (사용자가 버튼을 변경하지 못하게)
+	CMFCToolBar::SetCustomizeMode(FALSE);
+
+	// 툴바를 고정하여 이동 불가하게 설정 (선택사항)
+	//m_wndToolBar.SetBarStyle(m_wndToolBar.GetBarStyle() &
+	//	~(CBRS_GRIPPER | CBRS_SIZE_DYNAMIC | CBRS_BORDER_TOP | CBRS_BORDER_BOTTOM | CBRS_BORDER_LEFT | CBRS_BORDER_RIGHT));	DragAcceptFiles();
 
 	return 0;
 }
 
 BOOL CMainFrame::PreCreateWindow(CREATESTRUCT& cs)
 {
-	if( !CMDIFrameWnd::PreCreateWindow(cs) )
+	if( !CMDIFrameWndEx::PreCreateWindow(cs) )
 		return FALSE;
 	// TODO: CREATESTRUCT cs를 수정하여 여기에서
 	//  Window 클래스 또는 스타일을 수정합니다.
@@ -95,12 +111,12 @@ BOOL CMainFrame::PreCreateWindow(CREATESTRUCT& cs)
 #ifdef _DEBUG
 void CMainFrame::AssertValid() const
 {
-	CMDIFrameWnd::AssertValid();
+	CMDIFrameWndEx::AssertValid();
 }
 
 void CMainFrame::Dump(CDumpContext& dc) const
 {
-	CMDIFrameWnd::Dump(dc);
+	CMDIFrameWndEx::Dump(dc);
 }
 #endif //_DEBUG
 
@@ -153,7 +169,7 @@ BOOL CMainFrame::PreTranslateMessage(MSG* pMsg)
 		}
 	}
 
-	return CMDIFrameWnd::PreTranslateMessage(pMsg);
+	return CMDIFrameWndEx::PreTranslateMessage(pMsg);
 }
 
 void CMainFrame::OnClose()
@@ -184,7 +200,7 @@ void CMainFrame::OnClose()
 		pApp->WriteProfileInt(_T("ChildFrame"), _T("bottom"), wpChild.rcNormalPosition.bottom);
 	}
 
-	CMDIFrameWnd::OnClose();
+	CMDIFrameWndEx::OnClose();
 }
 
 void CMainFrame::set_image_info(int total_frames, int width, int height)

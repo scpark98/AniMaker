@@ -119,6 +119,12 @@ void CPreviewDlg::set_image(CSCD2Image* pImg)
 	m_imgDlg.play();
 	//m_imgDlg.load(_T("D:\\share.webp"), false);
 }
+
+void CPreviewDlg::set_title(CString title)
+{
+	SetWindowText(_T("Preview - ") + title);
+}
+
 BOOL CPreviewDlg::PreTranslateMessage(MSG* pMsg)
 {
 	// TODO: 여기에 특수화된 코드를 추가 및/또는 기본 클래스를 호출합니다.

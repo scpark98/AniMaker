@@ -164,7 +164,7 @@ void CAniMakerView::OnDraw(CDC* /*pDC*/)
 					draw_rect(d2dc, rthumb, Gdiplus::Color::RoyalBlue, Gdiplus::Color::Transparent, 4.0f / m_zoom);
 				}
 			}
-			x += thumbW + m_thumb_gap / m_zoom;
+			x += thumbW + (m_thumb_gap / m_zoom);
 		}
 	}
 
@@ -706,8 +706,8 @@ void CAniMakerView::recalc_scrollbars()
 
 	if (nFrames > 0 && m_img.is_valid())
 	{
-		float thumbW = frame_step - m_thumb_gap;
-		contentW = m_thumb_margin * 2 + nFrames * thumbW + (nFrames - 1) * m_thumb_gap;
+		float thumbW = frame_step - (m_thumb_gap / m_zoom);
+		contentW = m_thumb_margin * 2 + nFrames * thumbW + (nFrames - 1) * (m_thumb_gap / m_zoom);
 		contentH = m_thumb_margin * 2 + m_sz_thumb;
 	}
 
@@ -746,7 +746,7 @@ float CAniMakerView::get_frame_step()
 {
 	float imgH = m_img.get_height();
 	float thumbW = (imgH > 0.f) ? (m_img.get_width() / imgH * m_sz_thumb) : m_sz_thumb;
-	return thumbW + m_thumb_gap;
+	return thumbW + (m_thumb_gap / m_zoom);
 }
 
 int	CAniMakerView::get_frame_index(CPoint pt)
@@ -762,7 +762,7 @@ int	CAniMakerView::get_frame_index(CPoint pt)
 	float imgH = m_img.get_height();
 	float thumbH = m_sz_thumb;
 	float thumbW = (imgH > 0.f) ? (m_img.get_width() / imgH * thumbH) : thumbH;
-	float frame_step = thumbW + m_thumb_gap;
+	float frame_step = thumbW + (m_thumb_gap / m_zoom);
 
 	// Y 범위 체크
 	if (wy < m_thumb_margin || wy > m_thumb_margin + thumbH)
@@ -796,7 +796,7 @@ void CAniMakerView::get_frames_in_rect(D2D1_RECT_F rectWorld, std::deque<int>& r
 	float imgH = m_img.get_height();
 	float thumbH = m_sz_thumb;
 	float thumbW = (imgH > 0.f) ? (m_img.get_width() / imgH * thumbH) : thumbH;
-	float frame_step = thumbW + m_thumb_gap;
+	float frame_step = thumbW + (m_thumb_gap / m_zoom);
 
 	for (int i = 0; i < nFrames; i++)
 	{
@@ -820,7 +820,7 @@ void CAniMakerView::ensure_frame_visible(int index)
 		return;
 
 	float frame_step = get_frame_step();
-	float thumbW = frame_step - m_thumb_gap;
+	float thumbW = frame_step - (m_thumb_gap / m_zoom);
 
 	// 해당 프레임의 월드 좌표 범위
 	float frameLeft = m_thumb_margin + index * frame_step;
@@ -1619,6 +1619,8 @@ void CAniMakerView::OnUpdateEditRedo(CCmdUI* pCmdUI)
 //단, preview 창이 열려있는 않으면 굳이 매번 적용시킬 필요는 없다.
 void CAniMakerView::apply_to_preview()
 {
+	pDoc->SetModifiedFlag(TRUE);
+
 	if (m_preview.IsWindowVisible())
 		m_preview.set_image(&m_img);
 }

@@ -72,9 +72,6 @@ int CMainFrame::OnCreate(LPCREATESTRUCT lpCreateStruct)
 	}
 
 	m_wndStatusBar.SetIndicators(indicators, sizeof(indicators)/sizeof(UINT));
-
-	// TODO: 도구 모음을 도킹할 수 없게 하려면 이 세 줄을 삭제하십시오.
-	m_wndToolBar.EnableDocking(CBRS_ALIGN_ANY);
 	m_wndStatusBar.SetPaneInfo(status_default, ID_SEPARATOR, SBPS_STRETCH, 240);
 	m_wndStatusBar.SetPaneInfo(status_image_info, ID_SEPARATOR, SBPS_NORMAL, 140);
 	m_wndStatusBar.SetPaneInfo(status_duration_info, ID_SEPARATOR, SBPS_NORMAL, 100);
@@ -86,6 +83,7 @@ int CMainFrame::OnCreate(LPCREATESTRUCT lpCreateStruct)
 	EnableDocking(CBRS_ALIGN_ANY);
 	DockPane(&m_wndToolBar);  // DockControlBar → DockPane
 
+	m_wndToolBar.SetSizes(CSize(32, 32), CSize(16, 16));
 	// 툴바 커스터마이징 비활성화 (사용자가 버튼을 변경하지 못하게)
 	CMFCToolBar::SetCustomizeMode(FALSE);
 

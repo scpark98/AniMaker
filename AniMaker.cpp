@@ -81,8 +81,6 @@ BOOL CAniMakerApp::InitInstance()
 	theApp.GetTooltipManager()->SetTooltipParams(
 		AFX_TOOLTIP_TYPE_ALL, RUNTIME_CLASS(CMFCToolTipCtrl), &ttParams);
 
-
-
 	CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);	//COINIT_MULTITHREADED를 사용하면 프로그램 종료 시 런타임 에러 발생함.
 
 
@@ -130,10 +128,14 @@ BOOL CAniMakerApp::InitInstance()
 	CCommandLineInfo cmdInfo;
 	ParseCommandLine(cmdInfo);
 
+	//프로그램 시작 시 기본 빈 문서가 생성되는 것을 방지하기 위해.
+	cmdInfo.m_nShellCommand = CCommandLineInfo::FileNothing;
+
 	// 명령줄에 지정된 명령을 디스패치합니다.
 	// 응용 프로그램이 /RegServer, /Register, /Unregserver 또는 /Unregister로 시작된 경우 FALSE를 반환합니다.
 	if (!ProcessShellCommand(cmdInfo))
 		return FALSE;
+
 	// 주 창이 초기화되었으므로 이를 표시하고 업데이트합니다.
 	pMainFrame->ShowWindow(m_nCmdShow);
 	pMainFrame->UpdateWindow();
@@ -192,13 +194,8 @@ void CAniMakerApp::OnAppAbout()
 }
 
 // CAniMakerApp 메시지 처리기
-
-
-
-
 void CAniMakerApp::OnFileNew()
 {
-	// MainFrm::OnDropFiles와 동일한 패턴: 새 Doc/Frame/View 생성 후 load 호출
 	POSITION pos = GetFirstDocTemplatePosition();
 	CDocTemplate* pTemplate = GetNextDocTemplate(pos);
 	if (!pTemplate)

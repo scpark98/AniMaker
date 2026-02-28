@@ -45,7 +45,6 @@ BEGIN_MESSAGE_MAP(CAniMakerView, CView)
 	ON_WM_VSCROLL()
 	ON_COMMAND(ID_MENU_PREVIEW, &CAniMakerView::OnMenuPreview)
 	ON_COMMAND(ID_MENU_CUT, &CAniMakerView::OnMenuCut)
-	ON_UPDATE_COMMAND_UI(ID_MENU_CUT, &CAniMakerView::OnUpdateMenuCut)
 	ON_COMMAND(ID_MENU_COPY, &CAniMakerView::OnMenuCopy)
 	ON_COMMAND(ID_MENU_PASTE_INTO_SELECTED_FRAME, &CAniMakerView::OnMenuPasteIntoSelectedFrame)
 	ON_COMMAND(ID_MENU_PASTE_BEFORE_CURRENT_FRAME, &CAniMakerView::OnMenuPasteBeforeCurrentFrame)
@@ -59,6 +58,17 @@ BEGIN_MESSAGE_MAP(CAniMakerView, CView)
 	ON_WM_RBUTTONDOWN()
 	ON_COMMAND(ID_MENU_VIEW_ANIMATION, &CAniMakerView::OnMenuViewAnimation)
 	ON_COMMAND(ID_MENU_SAVE_AS, &CAniMakerView::OnMenuSaveAs)
+	ON_COMMAND(ID_FILE_SAVE, &CAniMakerView::OnFileSave)
+	ON_COMMAND(ID_EDIT_CUT, &CAniMakerView::OnMenuCut)
+	ON_COMMAND(ID_EDIT_COPY, &CAniMakerView::OnMenuCopy)
+	ON_COMMAND(ID_EDIT_PASTE, &CAniMakerView::OnMenuPasteAfterCurrentFrame)
+	ON_UPDATE_COMMAND_UI(ID_EDIT_CUT, &CAniMakerView::OnUpdateEditCut)
+	ON_UPDATE_COMMAND_UI(ID_EDIT_COPY, &CAniMakerView::OnUpdateEditCopy)
+	ON_UPDATE_COMMAND_UI(ID_EDIT_PASTE, &CAniMakerView::OnUpdateEditPaste)
+	ON_COMMAND(ID_EDIT_UNDO, &CAniMakerView::OnEditUndo)
+	ON_COMMAND(ID_EDIT_REDO, &CAniMakerView::OnEditRedo)
+	ON_UPDATE_COMMAND_UI(ID_EDIT_UNDO, &CAniMakerView::OnUpdateEditUndo)
+	ON_UPDATE_COMMAND_UI(ID_EDIT_REDO, &CAniMakerView::OnUpdateEditRedo)
 END_MESSAGE_MAP()
 
 // CAniMakerView 생성/소멸
@@ -303,6 +313,7 @@ BOOL CAniMakerView::PreTranslateMessage(MSG* pMsg)
 				m_selected.resize(1);
 
 			m_selected[0] = 0;
+
 			ensure_frame_visible(m_selected[0]);
 			Invalidate(FALSE);
 			return TRUE;
@@ -316,6 +327,7 @@ BOOL CAniMakerView::PreTranslateMessage(MSG* pMsg)
 			int nFrames = m_img.get_frame_count();
 			if (nFrames > 0)
 				m_selected[0] = nFrames - 1;
+
 			ensure_frame_visible(m_selected[0]);
 			Invalidate(FALSE);
 			return TRUE;
@@ -323,8 +335,18 @@ BOOL CAniMakerView::PreTranslateMessage(MSG* pMsg)
 		else if (pMsg->wParam == 'C')
 		{
 			if (IsCtrlPressed())
+			{
 				OnMenuCopy();
-			return TRUE;
+				return TRUE;
+			}
+		}
+		else if (pMsg->wParam == 'Y')
+		{
+			if (IsCtrlPressed())
+			{
+				OnEditRedo();
+				return TRUE;
+			}
 		}
 	}
 	else if (pMsg->message == WM_MOUSEHWHEEL)
@@ -735,38 +757,194 @@ void CAniMakerView::show_message(CString message)
 
 void CAniMakerView::OnMenuCut()
 {
-	// TODO: 여기에 명령 처리기 코드를 추가합니다.
+	if (m_selected.size() == 0)
+		return;
+
+	OnMenuCopy();
+	OnMenuDelete();
 }
 
-void CAniMakerView::OnUpdateMenuCut(CCmdUI* pCmdUI)
+void CAniMakerView::OnUpdateEditCut(CCmdUI* pCmdUI)
 {
-	// TODO: 여기에 명령 업데이트 UI 처리기 코드를 추가합니다.
+	pCmdUI->Enable(m_selected.size() > 0 && m_img.is_valid());
+}
+
+void CAniMakerView::OnUpdateEditCopy(CCmdUI* pCmdUI)
+{
+	pCmdUI->Enable(m_selected.size() > 0 && m_img.is_valid());
+}
+
+void CAniMakerView::OnUpdateEditPaste(CCmdUI* pCmdUI)
+{
+	pCmdUI->Enable(!m_copied_frames.empty() && !m_selected.empty());
 }
 
 void CAniMakerView::OnMenuCopy()
 {
+	if (m_selected.size() == 0)
+		return;
+
+	m_copied_frames.clear();
+	m_copied_delays.clear();
+
+	UINT w = (UINT)m_img.get_width();
+	UINT h = (UINT)m_img.get_height();
+
+	for (auto idx : m_selected)
+	{
+		CSCD2Image frame_copy;
+		frame_copy.create(m_img.get_WICFactory2(), m_img.get_d2dc(), w, h);
+
+		D2D1_POINT_2U pt = { 0, 0 };
+		D2D1_RECT_U r = { 0, 0, w, h };
+		frame_copy.get_frame_img(0)->CopyFromBitmap(&pt, m_img.get_frame_img(idx), &r);
+
+		m_copied_frames.push_back(std::move(frame_copy.get_frame_img(0)));
+		m_copied_delays.push_back(m_img.get_frame_delay(idx));
+	}
+
+	//클립보드에도 복사 (외부 붙여넣기 용도)
 	m_img.copy_to_clipboard(m_selected[0]);
 }
 
 void CAniMakerView::OnMenuPasteIntoSelectedFrame()
 {
-	// TODO: 여기에 명령 처리기 코드를 추가합니다.
+	if (m_copied_frames.empty() || m_selected.empty())
+		return;
+
+	UINT w = (UINT)m_img.get_width();
+	UINT h = (UINT)m_img.get_height();
+	D2D1_POINT_2U pt = { 0, 0 };
+	D2D1_RECT_U r = { 0, 0, w, h };
+
+	// Undo: 수정 전 원본 저장
+	UndoAction action;
+	action.type = eUndoType::ModifyFrames;
+
+	//복사된 프레임과 선택된 프레임을 1:1 대응하여 덮어쓴다
+	int count = min((int)m_copied_frames.size(), (int)m_selected.size());
+	for (int i = 0; i < count; i++)
+	{
+		int idx = m_selected[i];
+		action.indices.push_back(idx);
+		action.saved_frames.push_back(clone_bitmap(m_img.get_frame_img(idx)));
+		action.saved_delays.push_back(m_img.get_frame_delay(idx));
+
+		ID2D1Bitmap1* pDst = m_img.get_frame_img(idx);
+		if (pDst && m_copied_frames[i])
+		{
+			pDst->CopyFromBitmap(&pt, m_copied_frames[i].Get(), &r);
+			m_img.set_frame_delay(idx, m_copied_delays[i]);
+		}
+	}
+
+	((CMainFrame*)(AfxGetApp()->m_pMainWnd))->set_duration_info(*m_img.get_frame_delay_list());
+
+	Invalidate();
+
+	if (m_preview.IsWindowVisible())
+		m_preview.set_image(&m_img);
+
+	push_undo(std::move(action));
+	update_ui_after_edit();
 }
 
 void CAniMakerView::OnMenuPasteBeforeCurrentFrame()
 {
-	// TODO: 여기에 명령 처리기 코드를 추가합니다.
+	if (m_copied_frames.empty() || m_selected.empty())
+		return;
+
+	int insertPos = m_selected[0];
+	UINT w = (UINT)m_img.get_width();
+	UINT h = (UINT)m_img.get_height();
+
+	for (size_t i = 0; i < m_copied_frames.size(); i++)
+	{
+		CSCD2Image frame_img;
+		frame_img.create(m_img.get_WICFactory2(), m_img.get_d2dc(), w, h);
+
+		D2D1_POINT_2U pt = { 0, 0 };
+		D2D1_RECT_U r = { 0, 0, w, h };
+		frame_img.get_frame_img(0)->CopyFromBitmap(&pt, m_copied_frames[i].Get(), &r);
+
+		m_img.get_img_list()->insert(m_img.get_img_list()->begin() + insertPos,
+			std::move(frame_img.get_frame_img(0)));
+		m_img.get_frame_delay_list()->insert(m_img.get_frame_delay_list()->begin() + insertPos,
+			m_copied_delays[i]);
+		insertPos++;
+	}
+
+	((CMainFrame*)(AfxGetApp()->m_pMainWnd))->set_image_info(m_img.get_frame_count(), m_img.get_width(), m_img.get_height());
+	((CMainFrame*)(AfxGetApp()->m_pMainWnd))->set_duration_info(*m_img.get_frame_delay_list());
+
+	recalc_scrollbars();
+
+	if (m_preview.IsWindowVisible())
+		m_preview.set_image(&m_img);
+
+	Invalidate();
 }
 
 void CAniMakerView::OnMenuPasteAfterCurrentFrame()
 {
-	// TODO: 여기에 명령 처리기 코드를 추가합니다.
+	if (m_copied_frames.empty() || m_selected.empty())
+		return;
+
+	int insertPos = m_selected[0] + 1;
+	UINT w = (UINT)m_img.get_width();
+	UINT h = (UINT)m_img.get_height();
+
+	// Undo 데이터 준비
+	UndoAction action;
+	action.type = eUndoType::InsertFrames;
+
+	for (size_t i = 0; i < m_copied_frames.size(); i++)
+	{
+		CSCD2Image frame_img;
+		frame_img.create(m_img.get_WICFactory2(), m_img.get_d2dc(), w, h);
+
+		D2D1_POINT_2U pt = { 0, 0 };
+		D2D1_RECT_U r = { 0, 0, w, h };
+		frame_img.get_frame_img(0)->CopyFromBitmap(&pt, m_copied_frames[i].Get(), &r);
+
+		m_img.get_img_list()->insert(m_img.get_img_list()->begin() + insertPos,
+			std::move(frame_img.get_frame_img(0)));
+		m_img.get_frame_delay_list()->insert(m_img.get_frame_delay_list()->begin() + insertPos,
+			m_copied_delays[i]);
+
+		action.indices.push_back(insertPos);
+		insertPos++;
+	}
+
+	((CMainFrame*)(AfxGetApp()->m_pMainWnd))->set_image_info(m_img.get_frame_count(), m_img.get_width(), m_img.get_height());
+	((CMainFrame*)(AfxGetApp()->m_pMainWnd))->set_duration_info(*m_img.get_frame_delay_list());
+
+	recalc_scrollbars();
+
+	if (m_preview.IsWindowVisible())
+		m_preview.set_image(&m_img);
+
+	Invalidate();
+
+	push_undo(std::move(action));
+	update_ui_after_edit();
 }
 
 void CAniMakerView::OnMenuDelete()
 {
 	if (m_selected.size() == 0)
 		return;
+
+	// Undo 데이터 저장 (삭제 전에)
+	UndoAction action;
+	action.type = eUndoType::DeleteFrames;
+	action.indices = m_selected;
+	for (int idx : m_selected)
+	{
+		action.saved_frames.push_back(clone_bitmap(m_img.get_frame_img(idx)));
+		action.saved_delays.push_back(m_img.get_frame_delay(idx));
+	}
+	push_undo(std::move(action));
 
 	// 선택된 프레임들을 뒤에서부터 삭제 (인덱스가 밀리는 것을 방지하기 위해)
 	for (int i = m_selected.size() - 1; i >= 0; i--)
@@ -780,6 +958,8 @@ void CAniMakerView::OnMenuDelete()
 
 	//선택 항목들이 삭제되면 선택 정보 또한 clear 시켜야 한다.
 	m_selected.clear();
+
+	update_ui_after_edit();
 
 	recalc_scrollbars();
 
@@ -830,7 +1010,87 @@ void CAniMakerView::OnMenuDuplicateSelected()
 
 void CAniMakerView::OnMenuInsertFrameFromFile()
 {
-	// TODO: 여기에 명령 처리기 코드를 추가합니다.
+	if (m_selected.size() != 1)
+	{
+		show_message(_T("파일에서 프레임 삽입 기능은 하나의 프레임을 선택했을때만 가능합니다."));
+		return;
+	}
+
+	CString recent = theApp.GetProfileString(_T("setting"), _T("recent insert frame path"), _T(""));
+	CFileDialog dlg(TRUE, NULL, recent,
+		OFN_HIDEREADONLY | OFN_ALLOWMULTISELECT | OFN_FILEMUSTEXIST,
+		_T("Image Files (*.png;*.jpg;*.jpeg;*.bmp;*.gif;*.webp;*.tif)|*.png;*.jpg;*.jpeg;*.bmp;*.gif;*.webp;*.tif|All Files (*.*)|*.*||"));
+
+	// 멀티선택을 위한 충분한 버퍼
+	TCHAR szFiles[MAX_PATH * 100] = { 0 };
+	dlg.m_ofn.lpstrFile = szFiles;
+	dlg.m_ofn.nMaxFile = MAX_PATH * 100;
+
+	if (dlg.DoModal() == IDCANCEL)
+		return;
+
+	int insertPos = m_selected[0] + 1;
+	int src_frame_delay = m_img.get_frame_delay(m_selected[0]);
+	if (src_frame_delay <= 0)
+	{
+		src_frame_delay = 30;
+		m_img.set_frame_delay(m_selected[0], src_frame_delay);
+	}
+
+	UINT targetW = (UINT)m_img.get_width();
+	UINT targetH = (UINT)m_img.get_height();
+	ID2D1DeviceContext* d2dc = m_img.get_d2dc();
+
+	POSITION pos = dlg.GetStartPosition();
+
+	while (pos)
+	{
+		CString filePath = dlg.GetNextPathName(pos);
+		theApp.WriteProfileString(_T("setting"), _T("recent insert frame path"), filePath);
+
+		// 외부 이미지 로드 (auto_play = false)
+		CSCD2Image srcImg;
+		srcImg.load(m_img.get_WICFactory2(), d2dc, filePath, false);
+		if (!srcImg.is_valid())
+			continue;
+
+		// 현재 애니메이션과 동일한 크기의 빈 프레임 생성
+		CSCD2Image frame_img;
+		frame_img.create(m_img.get_WICFactory2(), d2dc, targetW, targetH);
+
+		ID2D1Bitmap1* pTarget = frame_img.get_frame_img(0);
+		ID2D1Bitmap1* pSrc = srcImg.get_frame_img(0);
+		if (!pTarget || !pSrc)
+			continue;
+
+		// source를 target 크기로 리사이즈하여 그린다
+		ComPtr<ID2D1Image> oldTarget;
+		d2dc->GetTarget(&oldTarget);
+		d2dc->SetTarget(pTarget);
+		d2dc->BeginDraw();
+		d2dc->Clear(D2D1::ColorF(0, 0, 0, 0));
+		D2D1_RECT_F ratio_rect = get_ratio_rect(D2D1::RectF(0, 0, (float)targetW, (float)targetH), srcImg.get_width(), srcImg.get_height());
+		d2dc->DrawBitmap(pSrc, ratio_rect);
+		d2dc->EndDraw();
+		d2dc->SetTarget(oldTarget.Get());
+
+		// 선택된 프레임 뒤에 순차 삽입
+		m_img.get_img_list()->insert(m_img.get_img_list()->begin() + insertPos,
+			std::move(frame_img.get_frame_img(0)));
+		m_img.get_frame_delay_list()->insert(m_img.get_frame_delay_list()->begin() + insertPos,
+			src_frame_delay);
+		insertPos++;
+	}
+
+	((CMainFrame*)(AfxGetApp()->m_pMainWnd))->set_image_info(m_img.get_frame_count(), m_img.get_width(), m_img.get_height());
+	((CMainFrame*)(AfxGetApp()->m_pMainWnd))->set_duration_info(*m_img.get_frame_delay_list());
+
+	recalc_scrollbars();
+
+	if (m_preview.IsWindowVisible())
+		m_preview.set_image(&m_img);
+
+	Invalidate();
 }
 
 void CAniMakerView::OnMenuInsertFrameEmpty()
@@ -946,6 +1206,7 @@ bool CAniMakerView::load(CString path)
 		pDoc = GetDocument();
 
 	pDoc->SetTitle(m_img.get_filename());
+	theApp.AddToRecentFileList(path);
 
 	CMainFrame* pMain = (CMainFrame*)(AfxGetApp()->m_pMainWnd);
 	pMain->set_image_info(m_img.get_frame_count(), (int)m_img.get_width(), (int)m_img.get_height());
@@ -981,4 +1242,255 @@ void CAniMakerView::OnActivateView(BOOL bActivate, CView* pActivateView, CView* 
 	}
 
 	pMain->set_zoom_info(m_zoom);
+}
+
+void CAniMakerView::OnFileSave()
+{
+	CString path = m_img.get_filename(true);
+
+	// 경로가 없거나 저장 가능한 형식이 아니면 Save As로 전환
+	CString ext = get_part(path, fn_ext);
+
+	if (path.IsEmpty() || (ext.CompareNoCase(_T("webp")) != 0 && ext.CompareNoCase(_T("gif")) != 0))
+	{
+		OnMenuSaveAs();
+		return;
+	}
+
+	if (ext.CompareNoCase(_T("gif")) == 0)
+		m_img.save_gif(path);
+	else
+		m_img.save_webp(path);
+}
+
+// ─── Undo/Redo 유틸리티 ───
+
+ComPtr<ID2D1Bitmap1> CAniMakerView::clone_bitmap(ID2D1Bitmap1* src)
+{
+	if (!src)
+		return nullptr;
+
+	UINT w = (UINT)m_img.get_width();
+	UINT h = (UINT)m_img.get_height();
+
+	CSCD2Image temp;
+	temp.create(m_img.get_WICFactory2(), m_img.get_d2dc(), w, h);
+
+	D2D1_POINT_2U pt = { 0, 0 };
+	D2D1_RECT_U r = { 0, 0, w, h };
+	temp.get_frame_img(0)->CopyFromBitmap(&pt, src, &r);
+
+	return ComPtr<ID2D1Bitmap1>(temp.get_frame_img(0));
+}
+
+void CAniMakerView::update_ui_after_edit()
+{
+	CMainFrame* pMain = (CMainFrame*)(AfxGetApp()->m_pMainWnd);
+	pMain->set_image_info(m_img.get_frame_count(), m_img.get_width(), m_img.get_height());
+	pMain->set_duration_info(*m_img.get_frame_delay_list());
+
+	recalc_scrollbars();
+
+	if (m_preview.IsWindowVisible())
+		m_preview.set_image(&m_img);
+
+	Invalidate();
+}
+
+void CAniMakerView::push_undo(UndoAction&& action)
+{
+	action.prev_selected = m_selected;
+
+	m_undo_stack.push_back(std::move(action));
+
+	if ((int)m_undo_stack.size() > MAX_UNDO)
+		m_undo_stack.pop_front();
+
+	//새 작업이 들어오면 redo 스택은 무효화
+	m_redo_stack.clear();
+}
+
+void CAniMakerView::perform_undo()
+{
+	if (m_undo_stack.empty())
+		return;
+
+	UndoAction action = std::move(m_undo_stack.back());
+	m_undo_stack.pop_back();
+
+	// Redo용으로 현재 상태를 역방향 액션으로 저장
+	UndoAction redo_action;
+	redo_action.prev_selected = m_selected;
+
+	switch (action.type)
+	{
+	case eUndoType::InsertFrames:
+	{
+		// Undo: 삽입된 프레임들을 제거
+		// Redo: 제거된 프레임들을 다시 삽입
+		redo_action.type = eUndoType::DeleteFrames;
+		redo_action.indices = action.indices;
+		for (int idx : action.indices)
+		{
+			redo_action.saved_frames.push_back(clone_bitmap(m_img.get_frame_img(idx)));
+			redo_action.saved_delays.push_back(m_img.get_frame_delay(idx));
+		}
+
+		// 뒤에서부터 제거 (인덱스 밀림 방지)
+		std::deque<int> sorted_indices = action.indices;
+		std::sort(sorted_indices.begin(), sorted_indices.end(), std::greater<int>());
+		for (int idx : sorted_indices)
+		{
+			m_img.get_img_list()->erase(m_img.get_img_list()->begin() + idx);
+			m_img.get_frame_delay_list()->erase(m_img.get_frame_delay_list()->begin() + idx);
+		}
+		break;
+	}
+	case eUndoType::DeleteFrames:
+	{
+		// Undo: 삭제된 프레임들을 원래 위치에 복원
+		// Redo: 복원된 프레임들을 다시 삭제
+		redo_action.type = eUndoType::InsertFrames;
+		redo_action.indices = action.indices;
+
+		for (size_t i = 0; i < action.indices.size(); i++)
+		{
+			int idx = action.indices[i];
+			ComPtr<ID2D1Bitmap1> bmp = clone_bitmap(action.saved_frames[i].Get());
+
+			m_img.get_img_list()->insert(m_img.get_img_list()->begin() + idx, std::move(bmp.Get()));
+			m_img.get_frame_delay_list()->insert(m_img.get_frame_delay_list()->begin() + idx, action.saved_delays[i]);
+		}
+		break;
+	}
+	case eUndoType::ModifyFrames:
+	{
+		// Undo: 원본 비트맵+딜레이 복원
+		// Redo: 현재 비트맵+딜레이 저장
+		redo_action.type = eUndoType::ModifyFrames;
+		redo_action.indices = action.indices;
+
+		UINT w = (UINT)m_img.get_width();
+		UINT h = (UINT)m_img.get_height();
+		D2D1_POINT_2U pt = { 0, 0 };
+		D2D1_RECT_U r = { 0, 0, w, h };
+
+		for (size_t i = 0; i < action.indices.size(); i++)
+		{
+			int idx = action.indices[i];
+			ID2D1Bitmap1* pCur = m_img.get_frame_img(idx);
+
+			// 현재 상태를 redo에 저장
+			redo_action.saved_frames.push_back(clone_bitmap(pCur));
+			redo_action.saved_delays.push_back(m_img.get_frame_delay(idx));
+
+			// 원본으로 복원
+			if (pCur && action.saved_frames[i])
+				pCur->CopyFromBitmap(&pt, action.saved_frames[i].Get(), &r);
+
+			m_img.set_frame_delay(idx, action.saved_delays[i]);
+		}
+		break;
+	}
+	}
+
+	m_selected = action.prev_selected;
+	m_redo_stack.push_back(std::move(redo_action));
+	update_ui_after_edit();
+}
+
+void CAniMakerView::perform_redo()
+{
+	if (m_redo_stack.empty())
+		return;
+
+	UndoAction action = std::move(m_redo_stack.back());
+	m_redo_stack.pop_back();
+
+	// Undo용 역방향 액션 생성
+	UndoAction undo_action;
+	undo_action.prev_selected = m_selected;
+
+	switch (action.type)
+	{
+	case eUndoType::InsertFrames:
+		// Redo에서 InsertFrames = 원래 Undo에서 삭제한 것을 다시 삭제
+		undo_action.type = eUndoType::DeleteFrames;
+		undo_action.indices = action.indices;
+		for (int idx : action.indices)
+		{
+			undo_action.saved_frames.push_back(clone_bitmap(m_img.get_frame_img(idx)));
+			undo_action.saved_delays.push_back(m_img.get_frame_delay(idx));
+		}
+		{
+			std::deque<int> sorted = action.indices;
+			std::sort(sorted.begin(), sorted.end(), std::greater<int>());
+			for (int idx : sorted)
+			{
+				m_img.get_img_list()->erase(m_img.get_img_list()->begin() + idx);
+				m_img.get_frame_delay_list()->erase(m_img.get_frame_delay_list()->begin() + idx);
+			}
+		}
+		break;
+
+	case eUndoType::DeleteFrames:
+		// Redo에서 DeleteFrames = 원래 삽입한 것을 다시 삽입
+		undo_action.type = eUndoType::InsertFrames;
+		undo_action.indices = action.indices;
+		for (size_t i = 0; i < action.indices.size(); i++)
+		{
+			int idx = action.indices[i];
+			ComPtr<ID2D1Bitmap1> bmp = clone_bitmap(action.saved_frames[i].Get());
+			m_img.get_img_list()->insert(m_img.get_img_list()->begin() + idx, std::move(bmp.Get()));
+			m_img.get_frame_delay_list()->insert(m_img.get_frame_delay_list()->begin() + idx, action.saved_delays[i]);
+		}
+		break;
+
+	case eUndoType::ModifyFrames:
+		undo_action.type = eUndoType::ModifyFrames;
+		undo_action.indices = action.indices;
+		{
+			UINT w = (UINT)m_img.get_width();
+			UINT h = (UINT)m_img.get_height();
+			D2D1_POINT_2U pt = { 0, 0 };
+			D2D1_RECT_U r = { 0, 0, w, h };
+			for (size_t i = 0; i < action.indices.size(); i++)
+			{
+				int idx = action.indices[i];
+				ID2D1Bitmap1* pCur = m_img.get_frame_img(idx);
+				undo_action.saved_frames.push_back(clone_bitmap(pCur));
+				undo_action.saved_delays.push_back(m_img.get_frame_delay(idx));
+				if (pCur && action.saved_frames[i])
+					pCur->CopyFromBitmap(&pt, action.saved_frames[i].Get(), &r);
+				m_img.set_frame_delay(idx, action.saved_delays[i]);
+			}
+		}
+		break;
+	}
+
+	m_selected = action.prev_selected;
+	m_undo_stack.push_back(std::move(undo_action));
+	update_ui_after_edit();
+}
+
+// ─── 메시지 핸들러 ───
+
+void CAniMakerView::OnEditUndo()
+{
+	perform_undo();
+}
+
+void CAniMakerView::OnEditRedo()
+{
+	perform_redo();
+}
+
+void CAniMakerView::OnUpdateEditUndo(CCmdUI* pCmdUI)
+{
+	pCmdUI->Enable(!m_undo_stack.empty());
+}
+
+void CAniMakerView::OnUpdateEditRedo(CCmdUI* pCmdUI)
+{
+	pCmdUI->Enable(!m_redo_stack.empty());
 }

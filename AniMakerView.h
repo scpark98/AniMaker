@@ -11,6 +11,31 @@
 
 class CAniMakerDoc;
 
+//Undo/Redo 액션 타입
+enum class eUndoType
+{
+	InsertFrames,		// 프레임 삽입됨 → Undo 시 제거
+	DeleteFrames,		// 프레임 삭제됨 → Undo 시 복원
+	ModifyFrames,		// 프레임 내용 변경됨 → Undo 시 원본 복원
+};
+
+struct UndoAction
+{
+	eUndoType			type;
+	std::deque<int>		indices;		// 대상 프레임 인덱스들
+
+	// DeleteFrames, ModifyFrames: 원본 비트맵+딜레이 백업
+	std::deque<ComPtr<ID2D1Bitmap1>> saved_frames;
+	std::deque<int>		saved_delays;
+
+	// InsertFrames: 삽입된 프레임 수 (Undo 시 제거할 개수)
+	int					insert_count = 0;
+	int					insert_pos = 0;		// 삽입 시작 위치
+
+	// 이전 선택 상태 복원용
+	std::deque<int>		prev_selected;
+};
+
 class CAniMakerView : public CView
 {
 protected: // serialization에서만 만들어집니다.
@@ -47,6 +72,22 @@ private:
 	//선택된 인덱스
 	std::deque<int>			m_selected;
 	int						get_frame_index(CPoint pt);
+
+	//내부 복사/붙여넣기용 프레임 저장
+	std::deque<ComPtr<ID2D1Bitmap1>> m_copied_frames;
+	std::deque<int>			m_copied_delays;
+
+	//Undo/Redo
+	std::deque<UndoAction>	m_undo_stack;
+	std::deque<UndoAction>	m_redo_stack;
+	static const int		MAX_UNDO = 50;
+
+	void					push_undo(UndoAction&& action);
+	void					perform_undo();
+	void					perform_redo();
+	ComPtr<ID2D1Bitmap1>	clone_bitmap(ID2D1Bitmap1* src);
+	void					update_ui_after_edit();
+
 
 	CSCShapeDlg				m_message;
 	void					show_message(CString message);
@@ -109,6 +150,15 @@ public:
 	afx_msg void OnMenuViewAnimation();
 	afx_msg void OnMenuSaveAs();
 	virtual void OnActivateView(BOOL bActivate, CView* pActivateView, CView* pDeactiveView);
+	afx_msg void OnFileSave();
+	afx_msg void OnEditUndo();
+	afx_msg void OnEditRedo();
+	afx_msg void OnUpdateEditUndo(CCmdUI* pCmdUI);
+	afx_msg void OnUpdateEditRedo(CCmdUI* pCmdUI);
+	afx_msg void OnUpdateEditCut(CCmdUI* pCmdUI);
+	afx_msg void OnUpdateEditCopy(CCmdUI* pCmdUI);
+	afx_msg void OnUpdateEditPaste(CCmdUI* pCmdUI);
+
 };
 
 #ifndef _DEBUG  // AniMakerView.cpp의 디버그 버전

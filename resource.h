@@ -11,6 +11,8 @@
 #define IDR_MENU_FRAME_CONTEXT          312
 #define IDR_MENU_CONTEXT                313
 #define IDD_FRAME_PROPERTY              313
+#define IDR_MAINFRAME_CONTEXT           315
+#define IDR_MENU_MAINFRAME_CONTEXT      315
 #define IDC_EDIT_DELAY                  1000
 #define ID_32771                        32771
 #define ID_MENU_PREVIEW                 32772
@@ -47,13 +49,18 @@
 #define ID_32803                        32803
 #define ID_MENU_ZOOM_50                 32804
 #define ID_MENU_ZOOM_100                32805
+#define ID_PASTE_FROMCLIPBOARD          32807
+#define ID_PASTE_FROM_CLIPBOARD         32808
+#define ID_PASTE_ASNEWANIMATION         32809
+#define ID_PASTE_AS_NEW_ANIMATION       32810
+#define ID_32811                        32811
 
 // Next default values for new objects
 // 
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
-#define _APS_NEXT_RESOURCE_VALUE        315
-#define _APS_NEXT_COMMAND_VALUE         32806
+#define _APS_NEXT_RESOURCE_VALUE        316
+#define _APS_NEXT_COMMAND_VALUE         32812
 #define _APS_NEXT_CONTROL_VALUE         1001
 #define _APS_NEXT_SYMED_VALUE           310
 #endif

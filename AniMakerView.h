@@ -49,6 +49,7 @@ public:
 // 작업입니다.
 public:
 	bool					load(CString path);
+	bool					load_from_clipboard();
 
 private:
 	CSCD2Context			m_d2dc;
@@ -172,6 +173,9 @@ public:
 
 	afx_msg void OnMenuZoom50();
 	afx_msg void OnMenuZoom100();
+	afx_msg void OnPasteFromClipboard();
+	afx_msg void OnPasteAsNewAnimation();
+	afx_msg void OnUpdatePasteAsNewAnimation(CCmdUI* pCmdUI);
 };
 
 #ifndef _DEBUG  // AniMakerView.cpp의 디버그 버전

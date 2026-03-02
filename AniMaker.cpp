@@ -27,6 +27,8 @@ BEGIN_MESSAGE_MAP(CAniMakerApp, CWinAppEx)
 	ON_COMMAND(ID_FILE_NEW, &CAniMakerApp::OnFileNew)
 	ON_COMMAND(ID_FILE_OPEN, &CAniMakerApp::OnFileOpen)
 	ON_COMMAND(ID_FILE_CLOSE, &CAniMakerApp::OnFileClose)
+	ON_COMMAND(ID_PASTE_AS_NEW_ANIMATION, &CAniMakerApp::OnPasteAsNewAnimation)
+	ON_UPDATE_COMMAND_UI(ID_PASTE_AS_NEW_ANIMATION, &CAniMakerApp::OnUpdatePasteAsNewAnimation)
 END_MESSAGE_MAP()
 
 
@@ -244,4 +246,36 @@ void CAniMakerApp::OnFileOpen()
 void CAniMakerApp::OnFileClose()
 {
 	// TODO: 여기에 명령 처리기 코드를 추가합니다.
+}
+
+void CAniMakerApp::OnPasteAsNewAnimation()
+{
+	POSITION pos = GetFirstDocTemplatePosition();
+	CDocTemplate* pTemplate = GetNextDocTemplate(pos);
+	if (!pTemplate)
+		return;
+
+	CDocument* pDoc = pTemplate->OpenDocumentFile(nullptr);
+	if (!pDoc)
+		return;
+
+	POSITION viewPos = pDoc->GetFirstViewPosition();
+	CView* pView = pDoc->GetNextView(viewPos);
+	CAniMakerView* pAniView = dynamic_cast<CAniMakerView*>(pView);
+	if (pAniView)
+	{
+		if (!pAniView->load_from_clipboard())
+		{
+			pDoc->OnCloseDocument();
+		}
+	}
+}
+
+void CAniMakerApp::OnUpdatePasteAsNewAnimation(CCmdUI* pCmdUI)
+{
+	static UINT cfPng = RegisterClipboardFormat(_T("PNG"));
+	BOOL hasImage = IsClipboardFormatAvailable(CF_DIBV5) ||
+		IsClipboardFormatAvailable(CF_DIB) ||
+		IsClipboardFormatAvailable(cfPng);
+	pCmdUI->Enable(hasImage);
 }

@@ -71,6 +71,9 @@ BEGIN_MESSAGE_MAP(CAniMakerView, CView)
 	ON_UPDATE_COMMAND_UI(ID_EDIT_REDO, &CAniMakerView::OnUpdateEditRedo)
 	ON_COMMAND(ID_MENU_ZOOM_50, &CAniMakerView::OnMenuZoom50)
 	ON_COMMAND(ID_MENU_ZOOM_100, &CAniMakerView::OnMenuZoom100)
+	ON_COMMAND(ID_PASTE_FROM_CLIPBOARD, &CAniMakerView::OnPasteFromClipboard)
+	ON_COMMAND(ID_PASTE_AS_NEW_ANIMATION, &CAniMakerView::OnPasteAsNewAnimation)
+	ON_UPDATE_COMMAND_UI(ID_PASTE_AS_NEW_ANIMATION, &CAniMakerView::OnUpdatePasteAsNewAnimation)
 END_MESSAGE_MAP()
 
 // CAniMakerView 생성/소멸
@@ -124,8 +127,11 @@ void CAniMakerView::OnDraw(CDC* /*pDC*/)
 		float thumbH = m_sz_thumb;
 		float thumbW = (imgH > 0.f) ? (imgW / imgH * thumbH) : thumbH;
 
-		float x = m_thumb_margin;
-		float y = m_thumb_margin;
+		float margin = m_thumb_margin / m_zoom;
+		float gap = m_thumb_gap / m_zoom;
+
+		float x = margin;
+		float y = margin;
 		CString str;
 
 		for (int i = 0; i < nFrames; i++)
@@ -148,13 +154,13 @@ void CAniMakerView::OnDraw(CDC* /*pDC*/)
 				d2dc->DrawBitmap(pFrame, rthumb);
 
 				//이미지 영역에 옅은 회색 테두리 표시
-				draw_rect(d2dc, rthumb, Gdiplus::Color::LightGray, Gdiplus::Color::Transparent, 1.0f);
+				draw_rect(d2dc, rthumb, Gdiplus::Color::LightGray, Gdiplus::Color::Transparent, 1.0f / m_zoom);
 
 				//frame index와 delay 표시
 				str.Format(_T("F:%d D:%d"), i, m_img.get_frame_delay(i));
 				D2D1_RECT_F rtext = rthumb;
-				rtext.top = rthumb.bottom + 8;
-				rtext.bottom = rtext.top + 24;
+				rtext.top = rthumb.bottom + 8.0f / m_zoom;
+				rtext.bottom = rtext.top + 24.0f / m_zoom;
 				draw_text(d2dc, rtext, str, _T("Arial"), 12.0f / m_zoom, FW_NORMAL, Gdiplus::Color::Black, Gdiplus::Color::LightGray, DT_CENTER | DT_TOP);
 
 				//선택항목이면 royalblue border로 표시한다.
@@ -164,7 +170,7 @@ void CAniMakerView::OnDraw(CDC* /*pDC*/)
 					draw_rect(d2dc, rthumb, Gdiplus::Color::RoyalBlue, Gdiplus::Color::Transparent, 4.0f / m_zoom);
 				}
 			}
-			x += thumbW + (m_thumb_gap / m_zoom);
+			x += thumbW + gap;
 		}
 	}
 
@@ -635,12 +641,12 @@ void CAniMakerView::OnRButtonUp(UINT nFlags, CPoint point)
 
 	pMenu = menu.GetSubMenu(0);
 
+
+	pMenu->EnableMenuItem(ID_MENU_PASTE_INTO_SELECTED_FRAME, (!m_copied_frames.empty() && !m_selected.empty() ? MF_ENABLED : MF_DISABLED));
+	pMenu->EnableMenuItem(ID_MENU_PASTE_BEFORE_CURRENT_FRAME, (!m_copied_frames.empty() && !m_selected.empty() ? MF_ENABLED : MF_DISABLED));
+	pMenu->EnableMenuItem(ID_MENU_PASTE_AFTER_CURRENT_FRAME, (!m_copied_frames.empty() && !m_selected.empty() ? MF_ENABLED : MF_DISABLED));
+
 	ClientToScreen(&point);
-
-
-
-
-
 	pMenu->TrackPopupMenu(TPM_LEFTALIGN | TPM_RIGHTBUTTON, point.x, point.y, this);
 
 	CView::OnRButtonUp(nFlags, point);
@@ -706,9 +712,11 @@ void CAniMakerView::recalc_scrollbars()
 
 	if (nFrames > 0 && m_img.is_valid())
 	{
-		float thumbW = frame_step - (m_thumb_gap / m_zoom);
-		contentW = m_thumb_margin * 2 + nFrames * thumbW + (nFrames - 1) * (m_thumb_gap / m_zoom);
-		contentH = m_thumb_margin * 2 + m_sz_thumb;
+		float margin = m_thumb_margin / m_zoom;
+		float gap = m_thumb_gap / m_zoom;
+		float thumbW = frame_step - gap;
+		contentW = margin * 2 + nFrames * thumbW + (nFrames - 1) * gap;
+		contentH = margin * 2 + m_sz_thumb;
 	}
 
 	// 뷰포트의 월드 좌표 크기
@@ -762,19 +770,19 @@ int	CAniMakerView::get_frame_index(CPoint pt)
 	float imgH = m_img.get_height();
 	float thumbH = m_sz_thumb;
 	float thumbW = (imgH > 0.f) ? (m_img.get_width() / imgH * thumbH) : thumbH;
+	float margin = m_thumb_margin / m_zoom;
 	float frame_step = thumbW + (m_thumb_gap / m_zoom);
 
 	// Y 범위 체크
-	if (wy < m_thumb_margin || wy > m_thumb_margin + thumbH)
+	if (wy < margin || wy > margin + thumbH)
 		return -1;
 
 	// X로 인덱스 계산
-	float relX = wx - m_thumb_margin;
+	float relX = wx - margin;
 	if (relX < 0.f)
 		return -1;
 
 	int index = (int)(relX / frame_step);
-	//trace(index);
 
 	// gap 영역 클릭 제외 (썸네일 이미지 위만 유효)
 	float withinFrame = relX - index * frame_step;
@@ -796,12 +804,13 @@ void CAniMakerView::get_frames_in_rect(D2D1_RECT_F rectWorld, std::deque<int>& r
 	float imgH = m_img.get_height();
 	float thumbH = m_sz_thumb;
 	float thumbW = (imgH > 0.f) ? (m_img.get_width() / imgH * thumbH) : thumbH;
+	float margin = m_thumb_margin / m_zoom;
 	float frame_step = thumbW + (m_thumb_gap / m_zoom);
 
 	for (int i = 0; i < nFrames; i++)
 	{
-		float x = m_thumb_margin + i * frame_step;
-		float y = m_thumb_margin;
+		float x = margin + i * frame_step;
+		float y = margin;
 
 		//프레임 사각형과 드래그 사각형의 교차 판정
 		if (x + thumbW > rectWorld.left && x < rectWorld.right &&
@@ -821,9 +830,10 @@ void CAniMakerView::ensure_frame_visible(int index)
 
 	float frame_step = get_frame_step();
 	float thumbW = frame_step - (m_thumb_gap / m_zoom);
+	float margin = m_thumb_margin / m_zoom;
 
 	// 해당 프레임의 월드 좌표 범위
-	float frameLeft = m_thumb_margin + index * frame_step;
+	float frameLeft = margin + index * frame_step;
 	float frameRight = frameLeft + thumbW;
 
 	CRect rc;
@@ -832,11 +842,11 @@ void CAniMakerView::ensure_frame_visible(int index)
 
 	// 왼쪽으로 벗어난 경우
 	if (frameLeft < m_pt_scroll.x)
-		m_pt_scroll.x = frameLeft - m_thumb_margin;
+		m_pt_scroll.x = frameLeft - margin;
 
 	// 오른쪽으로 벗어난 경우
 	if (frameRight > m_pt_scroll.x + visibleW)
-		m_pt_scroll.x = frameRight - visibleW + m_thumb_margin;
+		m_pt_scroll.x = frameRight - visibleW + margin;
 
 	recalc_scrollbars();
 }
@@ -1050,6 +1060,16 @@ void CAniMakerView::OnMenuPasteAfterCurrentFrame()
 	update_ui_after_edit();
 }
 
+void CAniMakerView::OnPasteFromClipboard()
+{
+	if (m_selected.size() == 0)
+		return;
+
+	m_img.paste_from_clipboard(m_selected[0]);
+	Invalidate();
+	//((CMainFrame*)(AfxGetApp()->m_pMainWnd))->set_duration_info(*m_img.get_frame_delay_list());
+}
+
 void CAniMakerView::OnMenuDelete()
 {
 	if (m_selected.size() == 0)
@@ -1222,11 +1242,8 @@ void CAniMakerView::OnMenuInsertFrameEmpty()
 
 	frame_img.create(m_img.get_WICFactory2(), m_img.get_d2dc(), m_img.get_width(), m_img.get_height());
 
-	//D2D1_POINT_2U pt = { 0, 0 };
-	//D2D1_RECT_U r = { 0, 0, m_img.get_width(), m_img.get_height() };
-	//frame_img.get_frame_img(0)->CopyFromBitmap(&pt, m_img.get_frame_img(m_selected[0]), &r);
-	m_img.get_img_list()->insert(m_img.get_img_list()->begin() + m_selected[0], std::move(frame_img.get_frame_img(0)));
-	m_img.get_frame_delay_list()->insert(m_img.get_frame_delay_list()->begin() + m_selected[0], m_img.get_frame_delay(m_selected[0]));
+	m_img.get_img_list()->insert(m_img.get_img_list()->begin() + m_selected[0] + 1, std::move(frame_img.get_frame_img(0)));
+	m_img.get_frame_delay_list()->insert(m_img.get_frame_delay_list()->begin() + m_selected[0] + 1, m_img.get_frame_delay(m_selected[0]));
 
 	((CMainFrame*)(AfxGetApp()->m_pMainWnd))->set_image_info(m_img.get_frame_count(), m_img.get_width(), m_img.get_height());
 	((CMainFrame*)(AfxGetApp()->m_pMainWnd))->set_duration_info(*m_img.get_frame_delay_list());
@@ -1382,6 +1399,8 @@ void CAniMakerView::OnFileSave()
 		m_img.save_gif(path);
 	else
 		m_img.save_webp(path);
+
+	pDoc->SetModifiedFlag(FALSE);
 }
 
 // ─── Undo/Redo 유틸리티 ───
@@ -1639,4 +1658,120 @@ void CAniMakerView::OnMenuZoom100()
 	recalc_scrollbars();
 	Invalidate();
 	((CMainFrame*)(AfxGetApp()->m_pMainWnd))->set_zoom_info(m_zoom);
+}
+
+bool CAniMakerView::load_from_clipboard()
+{
+	if (!m_d2dc.get_d2dc() || !m_d2dc.get_WICFactory())
+		return false;
+
+	// 클립보드 이미지 크기 확인
+	if (!OpenClipboard())
+		return false;
+
+	UINT width = 0, height = 0;
+	IWICImagingFactory2* factory = m_d2dc.get_WICFactory();
+
+	// 1) PNG 포맷 시도
+	static UINT cfPng = RegisterClipboardFormat(_T("PNG"));
+	HANDLE hData = GetClipboardData(cfPng);
+	if (hData)
+	{
+		SIZE_T size = GlobalSize(hData);
+		void* pData = GlobalLock(hData);
+		if (pData && size > 0)
+		{
+			ComPtr<IWICStream> stream;
+			if (SUCCEEDED(factory->CreateStream(&stream)) &&
+				SUCCEEDED(stream->InitializeFromMemory(reinterpret_cast<BYTE*>(pData), static_cast<DWORD>(size))))
+			{
+				ComPtr<IWICBitmapDecoder> decoder;
+				if (SUCCEEDED(factory->CreateDecoderFromStream(stream.Get(), nullptr, WICDecodeMetadataCacheOnLoad, &decoder)))
+				{
+					ComPtr<IWICBitmapFrameDecode> frame;
+					if (SUCCEEDED(decoder->GetFrame(0, &frame)))
+						frame->GetSize(&width, &height);
+				}
+			}
+			GlobalUnlock(hData);
+		}
+	}
+
+	// 2) CF_DIBV5 시도
+	if (width == 0 || height == 0)
+	{
+		hData = GetClipboardData(CF_DIBV5);
+		if (hData)
+		{
+			BITMAPV5HEADER* pbv5 = (BITMAPV5HEADER*)GlobalLock(hData);
+			if (pbv5)
+			{
+				width = abs((int)pbv5->bV5Width);
+				height = abs((int)pbv5->bV5Height);
+				GlobalUnlock(hData);
+			}
+		}
+	}
+
+	// 3) CF_DIB 시도
+	if (width == 0 || height == 0)
+	{
+		hData = GetClipboardData(CF_DIB);
+		if (hData)
+		{
+			BITMAPINFOHEADER* pbi = (BITMAPINFOHEADER*)GlobalLock(hData);
+			if (pbi)
+			{
+				width = abs((int)pbi->biWidth);
+				height = abs((int)pbi->biHeight);
+				GlobalUnlock(hData);
+			}
+		}
+	}
+
+	CloseClipboard();
+
+	if (width == 0 || height == 0)
+		return false;
+
+	// 이미지 생성 및 클립보드 붙여넣기
+	m_img.create(m_d2dc.get_WICFactory(), m_d2dc.get_d2dc(), width, height);
+
+	if (!m_img.paste_from_clipboard(0))
+		return false;
+
+	// 프레임 딜레이 설정
+	m_img.set_frame_delay(0, 100);
+
+	// zoom 1.0 = 실제 이미지 크기
+	m_sz_thumb = (float)height;
+
+	// UI 업데이트
+	if (!pDoc)
+		pDoc = GetDocument();
+
+	pDoc->SetTitle(_T("Clipboard"));
+	pDoc->SetModifiedFlag(TRUE);
+
+	m_selected.clear();
+	m_selected.push_back(0);
+
+	CMainFrame* pMain = (CMainFrame*)(AfxGetApp()->m_pMainWnd);
+	pMain->set_image_info(m_img.get_frame_count(), (int)width, (int)height);
+	pMain->set_duration_info(*m_img.get_frame_delay_list());
+
+	recalc_scrollbars();
+	Invalidate();
+
+	return true;
+}
+
+void CAniMakerView::OnPasteAsNewAnimation()
+{
+	((CAniMakerApp*)AfxGetApp())->OnPasteAsNewAnimation();
+}
+
+void CAniMakerView::OnUpdatePasteAsNewAnimation(CCmdUI* pCmdUI)
+{
+	((CAniMakerApp*)AfxGetApp())->OnUpdatePasteAsNewAnimation(pCmdUI);
 }

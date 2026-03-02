@@ -22,6 +22,7 @@ BEGIN_MESSAGE_MAP(CMainFrame, CMDIFrameWndEx)
 	ON_WM_DROPFILES()
 	ON_WM_CLOSE()
 	ON_MESSAGE(WM_CHECK_CHILD_FRAMES, &CMainFrame::OnCheckChildFrames)
+	ON_WM_CONTEXTMENU()
 END_MESSAGE_MAP()
 
 //ID_SEPARATOR의 갯수는 .h에 정의된 enum status_id의 갯수와 일치해야 한다.
@@ -252,4 +253,15 @@ LRESULT CMainFrame::OnCheckChildFrames(WPARAM wParam, LPARAM lParam)
 	}
 
 	return 0;
+}
+
+void CMainFrame::OnContextMenu(CWnd* pWnd, CPoint point)
+{
+	CMenu menu;
+	CMenu* pSubMenu = nullptr;
+
+	menu.LoadMenu(IDR_MENU_MAINFRAME_CONTEXT);
+	pSubMenu = menu.GetSubMenu(0);
+
+	pSubMenu->TrackPopupMenu(TPM_LEFTALIGN | TPM_RIGHTBUTTON, point.x, point.y, this);
 }

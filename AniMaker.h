@@ -23,6 +23,8 @@ public:
 public:
 	virtual BOOL InitInstance();
 	virtual int ExitInstance();
+	afx_msg void OnPasteAsNewAnimation();
+	afx_msg void OnUpdatePasteAsNewAnimation(CCmdUI* pCmdUI);
 
 // 구현입니다.
 	afx_msg void OnAppAbout();

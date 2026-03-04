@@ -54,13 +54,17 @@
 #define ID_PASTE_ASNEWANIMATION         32809
 #define ID_PASTE_AS_NEW_ANIMATION       32810
 #define ID_32811                        32811
+#define ID_FRAME_MAKETRANSPARENTBACK    32812
+#define ID_MENU_VIEW_MAKE_TRANSPARENT_BACK 32813
+#define ID_FRAME_SELECTALL              32814
+#define ID_MENU_SELECT_ALL              32815
 
 // Next default values for new objects
 // 
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_NEXT_RESOURCE_VALUE        316
-#define _APS_NEXT_COMMAND_VALUE         32812
+#define _APS_NEXT_COMMAND_VALUE         32816
 #define _APS_NEXT_CONTROL_VALUE         1001
 #define _APS_NEXT_SYMED_VALUE           310
 #endif

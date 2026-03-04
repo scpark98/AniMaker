@@ -176,6 +176,9 @@ public:
 	afx_msg void OnPasteFromClipboard();
 	afx_msg void OnPasteAsNewAnimation();
 	afx_msg void OnUpdatePasteAsNewAnimation(CCmdUI* pCmdUI);
+	afx_msg void OnMenuViewMakeTransparentBack();
+	afx_msg void OnMenuSelectAll();
+	afx_msg void OnFileSaveAs();
 };
 
 #ifndef _DEBUG  // AniMakerView.cpp의 디버그 버전

@@ -19,6 +19,7 @@
 #define new DEBUG_NEW
 #endif
 
+#define DEFAULT_FRAME_DELAY		300		//frame delay 정보가 존재하지 않는 이미지일 경우 기본 frame delay를 300ms로 설정한다.
 
 // CAniMakerView
 
@@ -54,11 +55,12 @@ BEGIN_MESSAGE_MAP(CAniMakerView, CView)
 	ON_COMMAND(ID_MENU_INSERT_FRAME_FROM_FILE, &CAniMakerView::OnMenuInsertFrameFromFile)
 	ON_COMMAND(ID_MENU_INSERT_FRAME_EMPTY, &CAniMakerView::OnMenuInsertFrameEmpty)
 	ON_COMMAND(ID_MENU_FRAME_PROPERTY, &CAniMakerView::OnMenuFrameProperty)
-	ON_COMMAND(ID_MENU_SAVE_FRAME_AS, &CAniMakerView::OnMenuSaveFrameAs)
 	ON_WM_RBUTTONDOWN()
 	ON_COMMAND(ID_MENU_VIEW_ANIMATION, &CAniMakerView::OnMenuViewAnimation)
 	ON_COMMAND(ID_MENU_SAVE_AS, &CAniMakerView::OnMenuSaveAs)
+	ON_COMMAND(ID_MENU_SAVE_FRAME_AS, &CAniMakerView::OnMenuSaveFrameAs)
 	ON_COMMAND(ID_FILE_SAVE, &CAniMakerView::OnFileSave)
+	ON_COMMAND(ID_FILE_SAVE_AS, &CAniMakerView::OnMenuSaveAs)
 	ON_COMMAND(ID_EDIT_CUT, &CAniMakerView::OnMenuCut)
 	ON_COMMAND(ID_EDIT_COPY, &CAniMakerView::OnMenuCopy)
 	ON_COMMAND(ID_EDIT_PASTE, &CAniMakerView::OnMenuPasteAfterCurrentFrame)
@@ -74,6 +76,8 @@ BEGIN_MESSAGE_MAP(CAniMakerView, CView)
 	ON_COMMAND(ID_PASTE_FROM_CLIPBOARD, &CAniMakerView::OnPasteFromClipboard)
 	ON_COMMAND(ID_PASTE_AS_NEW_ANIMATION, &CAniMakerView::OnPasteAsNewAnimation)
 	ON_UPDATE_COMMAND_UI(ID_PASTE_AS_NEW_ANIMATION, &CAniMakerView::OnUpdatePasteAsNewAnimation)
+	ON_COMMAND(ID_MENU_VIEW_MAKE_TRANSPARENT_BACK, &CAniMakerView::OnMenuViewMakeTransparentBack)
+	ON_COMMAND(ID_MENU_SELECT_ALL, &CAniMakerView::OnMenuSelectAll)
 END_MESSAGE_MAP()
 
 // CAniMakerView 생성/소멸
@@ -100,9 +104,6 @@ BOOL CAniMakerView::PreCreateWindow(CREATESTRUCT& cs)
 
 void CAniMakerView::OnDraw(CDC* /*pDC*/)
 {
-	//CRect rc;
-	//GetClientRect(rc);
-
 	ID2D1DeviceContext* d2dc = m_d2dc.get_d2dc();
 	if (!d2dc)
 		return;
@@ -291,86 +292,103 @@ BOOL CAniMakerView::PreTranslateMessage(MSG* pMsg)
 	//TRACE(_T("message = %u, wParam = %u, lParam = %ld\n"), pMsg->message, pMsg->wParam, pMsg->lParam);
 	if (pMsg->message == WM_KEYDOWN)
 	{
-		if (pMsg->wParam == VK_ADD || pMsg->wParam == VK_OEM_PLUS)
+		switch (pMsg->wParam)
 		{
-			// '+' 키: 줌 인
-			m_zoom += m_zoom_step;
-			m_zoom = min(m_zoom, m_zoom_max);
-			((CMainFrame*)(AfxGetApp()->m_pMainWnd))->set_zoom_info(m_zoom);
-			recalc_scrollbars();
-			Invalidate(FALSE);
-			return TRUE;
-		}
-		else if (pMsg->wParam == VK_SUBTRACT || pMsg->wParam == VK_OEM_MINUS)
-		{
-			// '-' 키: 줌 아웃
-			m_zoom -= m_zoom_step;
-			m_zoom = max(m_zoom, m_zoom_min);
-			((CMainFrame*)(AfxGetApp()->m_pMainWnd))->set_zoom_info(m_zoom);
-			recalc_scrollbars();
-			Invalidate(FALSE);
-			return TRUE;
-		}
-		else if (pMsg->wParam == VK_LEFT || pMsg->wParam == VK_RIGHT)
-		{
-			int nFrames = m_img.get_frame_count();
-			if (nFrames <= 0)
-				return TRUE;
-
-			//멀티선택 상태에서 좌우 방향키를 누른다면 맨 처음 혹은 맨 끝 선택항목만 남긴다.
-			if (m_selected.size() > 1)
-				m_selected.resize(1);
-
-			if (pMsg->wParam == VK_LEFT)
-				m_selected[0] = max(0, m_selected[0] - 1);
-			else
-				m_selected[0] = min(nFrames - 1, m_selected[0] + 1);
-
-			// 선택 프레임이 보이도록 자동 스크롤
-			ensure_frame_visible(m_selected[0]);
-			Invalidate(FALSE);
-			return TRUE;
-		}
-		else if (pMsg->wParam == VK_HOME)
-		{
-			//멀티선택 상태에서 좌우 방향키를 누른다면 맨 처음 혹은 맨 끝 선택항목만 남긴다.
-			if (m_selected.size() > 1)
-				m_selected.resize(1);
-
-			m_selected[0] = 0;
-
-			ensure_frame_visible(m_selected[0]);
-			Invalidate(FALSE);
-			return TRUE;
-		}
-		else if (pMsg->wParam == VK_END)
-		{
-			//멀티선택 상태에서 좌우 방향키를 누른다면 맨 처음 혹은 맨 끝 선택항목만 남긴다.
-			if (m_selected.size() > 1)
-				m_selected.resize(1);
-
-			int nFrames = m_img.get_frame_count();
-			if (nFrames > 0)
-				m_selected[0] = nFrames - 1;
-
-			ensure_frame_visible(m_selected[0]);
-			Invalidate(FALSE);
-			return TRUE;
-		}
-		else if (pMsg->wParam == 'C')
-		{
-			if (IsCtrlPressed())
+			case VK_ADD:
+			case VK_OEM_PLUS:
 			{
-				OnMenuCopy();
+				// '+' 키: 줌 인
+				m_zoom += m_zoom_step;
+				m_zoom = min(m_zoom, m_zoom_max);
+				((CMainFrame*)(AfxGetApp()->m_pMainWnd))->set_zoom_info(m_zoom);
+				recalc_scrollbars();
+				Invalidate(FALSE);
 				return TRUE;
 			}
-		}
-		else if (pMsg->wParam == 'Y')
-		{
-			if (IsCtrlPressed())
+			case VK_SUBTRACT:
+			case VK_OEM_MINUS:
 			{
-				OnEditRedo();
+				// '-' 키: 줌 아웃
+				m_zoom -= m_zoom_step;
+				m_zoom = max(m_zoom, m_zoom_min);
+				((CMainFrame*)(AfxGetApp()->m_pMainWnd))->set_zoom_info(m_zoom);
+				recalc_scrollbars();
+				Invalidate(FALSE);
 				return TRUE;
+			}
+			case VK_LEFT:
+			case VK_RIGHT:
+			{
+				int nFrames = m_img.get_frame_count();
+				if (nFrames <= 0)
+					return TRUE;
+
+				//멀티선택 상태에서 좌우 방향키를 누른다면 맨 처음 혹은 맨 끝 선택항목만 남긴다.
+				if (m_selected.size() > 1)
+					m_selected.resize(1);
+
+				if (pMsg->wParam == VK_LEFT)
+					m_selected[0] = max(0, m_selected[0] - 1);
+				else
+					m_selected[0] = min(nFrames - 1, m_selected[0] + 1);
+
+				// 선택 프레임이 보이도록 자동 스크롤
+				ensure_frame_visible(m_selected[0]);
+				Invalidate(FALSE);
+				return TRUE;
+			}
+			case VK_HOME:
+			{
+				//멀티선택 상태에서 좌우 방향키를 누른다면 맨 처음 혹은 맨 끝 선택항목만 남긴다.
+				if (m_selected.size() > 1)
+					m_selected.resize(1);
+
+				m_selected[0] = 0;
+
+				ensure_frame_visible(m_selected[0]);
+				Invalidate(FALSE);
+				return TRUE;
+			}
+			case VK_END:
+			{
+				//멀티선택 상태에서 좌우 방향키를 누른다면 맨 처음 혹은 맨 끝 선택항목만 남긴다.
+				if (m_selected.size() > 1)
+					m_selected.resize(1);
+
+				int nFrames = m_img.get_frame_count();
+				if (nFrames > 0)
+					m_selected[0] = nFrames - 1;
+
+				ensure_frame_visible(m_selected[0]);
+				Invalidate(FALSE);
+				return TRUE;
+			}
+			case 'A':
+			{
+				if (IsCtrlPressed())
+				{
+					OnMenuSelectAll();
+					return TRUE;
+				}
+				break;
+			}
+			case 'C':
+			{
+				if (IsCtrlPressed())
+				{
+					OnMenuCopy();
+					return TRUE;
+				}
+				break;
+			}
+			case 'Y':
+			{
+				if (IsCtrlPressed())
+				{
+					OnEditRedo();
+					return TRUE;
+				}
+				break;
 			}
 		}
 	}
@@ -707,7 +725,8 @@ void CAniMakerView::recalc_scrollbars()
 	GetClientRect(&rc);
 
 	int nFrames = m_img.get_frame_count();
-	float contentW = 0.f, contentH = 0.f;
+	float contentW = 0.f;
+	float contentH = 0.f;
 	float frame_step = get_frame_step();
 
 	if (nFrames > 0 && m_img.is_valid())
@@ -716,7 +735,7 @@ void CAniMakerView::recalc_scrollbars()
 		float gap = m_thumb_gap / m_zoom;
 		float thumbW = frame_step - gap;
 		contentW = margin * 2 + nFrames * thumbW + (nFrames - 1) * gap;
-		contentH = margin * 2 + m_sz_thumb;
+		contentH = margin * 2 + m_sz_thumb + (8.0f + 24.0f) / m_zoom;	//8 + 24는 frame index, delay 표시를 위한 상단여백과 텍스트 영역 높이
 	}
 
 	// 뷰포트의 월드 좌표 크기
@@ -1130,7 +1149,7 @@ void CAniMakerView::OnMenuDuplicateSelected()
 	int src_frame_delay = m_img.get_frame_delay(m_selected[0]);
 	if (src_frame_delay <= 0)
 	{
-		src_frame_delay = 30;
+		src_frame_delay = DEFAULT_FRAME_DELAY;
 		m_img.set_frame_delay(m_selected[0], src_frame_delay);
 	}
 
@@ -1171,7 +1190,7 @@ void CAniMakerView::OnMenuInsertFrameFromFile()
 	int src_frame_delay = m_img.get_frame_delay(m_selected[0]);
 	if (src_frame_delay <= 0)
 	{
-		src_frame_delay = 30;
+		src_frame_delay = DEFAULT_FRAME_DELAY;
 		m_img.set_frame_delay(m_selected[0], src_frame_delay);
 	}
 
@@ -1311,22 +1330,20 @@ void CAniMakerView::OnMenuSaveAs()
 	if (path.IsEmpty())
 		path = get_exe_directory(true) + _T("untitled.webp");
 
-	CString recent = theApp.GetProfileString(_T("setting"), _T("recent saved file"), _T(""));
-	CFileDialog dlg(FALSE, _T("*"), recent, OFN_HIDEREADONLY | OFN_OVERWRITEPROMPT, _T("WebP Files (*.webp)|*.webp|Gif Files (*.gif)|*.gif||"));
+	CFileDialog dlg(FALSE, _T("*"), path, OFN_HIDEREADONLY | OFN_OVERWRITEPROMPT, _T("WebP Files (*.webp)|*.webp|Gif Files (*.gif)|*.gif||"));
 
 	if (dlg.DoModal() == IDCANCEL)
 		return;
 
-	recent = dlg.GetPathName();
-	theApp.WriteProfileString(_T("setting"), _T("recent saved file"), recent);
+	path = dlg.GetPathName();
 
 	if (dlg.GetFileExt().CompareNoCase(_T("gif")) == 0)
-		m_img.save_gif(recent);
+		m_img.save_gif(path);
 	else if (dlg.GetFileExt().CompareNoCase(_T("webp")) == 0)
-		m_img.save_webp(recent);
+		m_img.save_webp(path);
 	else
 	{
-		AfxMessageBox(_T("지원하지 않는 파일 형식입니다."));
+		AfxMessageBox(_T("WebP, Gif 형식만 지원됩니다."));
 	}
 }
 
@@ -1340,6 +1357,11 @@ bool CAniMakerView::load(CString path)
 	//zoom 1.0 = 실제 이미지 크기가 되도록 썸네일 크기를 이미지 높이로 설정
 	if (m_img.is_valid() && m_img.get_height() > 0)
 		m_sz_thumb = (float)m_img.get_height();
+
+	//frame count = 1인 이미지를 load한 경우 frame delay 정보가 없으므로 기본값으로 30ms를 넣어준다.
+	//그래야만 프레임 추가 시 문제가 발생하지 않는다. (frame delay 정보가 없는 상태에서 frame delay list에 접근하면 인덱스 에러가 발생한다.)
+	if (m_img.get_frame_count() == 1 && m_img.get_frame_delay_list()->empty())
+		m_img.get_frame_delay_list()->push_back(DEFAULT_FRAME_DELAY);
 
 	pDoc->SetTitle(m_img.get_filename());
 	theApp.AddToRecentFileList(path);
@@ -1386,7 +1408,7 @@ void CAniMakerView::OnFileSave()
 {
 	CString path = m_img.get_filename(true);
 
-	// 경로가 없거나 저장 가능한 형식이 아니면 Save As로 전환
+	// 경로가 없거나 webp, gif와 같은 animated image 형식이 아닌 파일들은 Save As로 전환
 	CString ext = get_part(path, fn_ext);
 
 	if (path.IsEmpty() || (ext.CompareNoCase(_T("webp")) != 0 && ext.CompareNoCase(_T("gif")) != 0))
@@ -1401,6 +1423,12 @@ void CAniMakerView::OnFileSave()
 		m_img.save_webp(path);
 
 	pDoc->SetModifiedFlag(FALSE);
+}
+
+
+void CAniMakerView::OnFileSaveAs()
+{
+	// TODO: 여기에 명령 처리기 코드를 추가합니다.
 }
 
 // ─── Undo/Redo 유틸리티 ───
@@ -1774,4 +1802,47 @@ void CAniMakerView::OnPasteAsNewAnimation()
 void CAniMakerView::OnUpdatePasteAsNewAnimation(CCmdUI* pCmdUI)
 {
 	((CAniMakerApp*)AfxGetApp())->OnUpdatePasteAsNewAnimation(pCmdUI);
+}
+
+void CAniMakerView::OnMenuViewMakeTransparentBack()
+{
+	if (m_selected.empty() || m_img.is_empty())
+		return;
+
+	// ── Undo 액션 준비: 변경 전 프레임 상태를 백업 ──
+	UndoAction action;
+	action.type = eUndoType::ModifyFrames;
+	action.indices = m_selected;
+
+	for (int idx : m_selected)
+	{
+		action.saved_frames.push_back(clone_bitmap(m_img.get_frame_img(idx)));
+		action.saved_delays.push_back(m_img.get_frame_delay(idx));
+	}
+
+	push_undo(std::move(action));
+
+	//이 for문 블록을 제외한 다른 코드들은 undo, redo를 위한 공통 코드이므로
+	//이 패턴대로 다른 함수들도 그대로 작성하면 undo, redo 동작이 지원된다.
+	CMainFrame* pMain = (CMainFrame*)(AfxGetApp()->m_pMainWnd);
+	pMain->set_progress_range(0, (int)m_selected.size());
+
+	for (int i = 0; i < m_selected.size(); i++)
+	{
+		pMain->set_progress_pos(i + 1);
+		m_img.make_back_transparent(m_selected[i]);
+	}
+
+	pMain->set_progress_pos(0);
+
+	Invalidate();
+}
+
+void CAniMakerView::OnMenuSelectAll()
+{
+	m_selected.clear();
+	for (int i = 0; i < m_img.get_frame_count(); i++)
+		m_selected.push_back(i);
+
+	Invalidate();
 }

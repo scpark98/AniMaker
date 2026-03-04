@@ -10,6 +10,7 @@
 enum status_id
 {
 	status_default = 0,
+	status_progress,
 	status_image_info,		//total frames, image size
 	status_duration_info,	//duration
 	status_zoom_info,		//zoom percentage
@@ -24,13 +25,17 @@ public:
 
 // 특성입니다.
 public:
+	CProgressCtrl		m_progress;
 
 // 작업입니다.
 public:
 	void				set_image_info(int total_frames, int width, int height);
+	void				set_progress_range(int min, int max);
+	void				set_progress_pos(int pos);
 	void				set_duration_info(std::deque<int>& frame_delays);
 	void				set_zoom_info(float zoom);
 	void				set_status_text(int index, CString text);
+
 
 // 재정의입니다.
 public:
@@ -60,6 +65,7 @@ public:
 	virtual BOOL PreTranslateMessage(MSG* pMsg);
 	afx_msg void OnClose();
 	afx_msg void OnContextMenu(CWnd* /*pWnd*/, CPoint /*point*/);
+	afx_msg void OnSize(UINT nType, int cx, int cy);
 };
 
 

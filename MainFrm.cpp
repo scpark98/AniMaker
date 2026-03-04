@@ -9,6 +9,9 @@
 
 #include "MainFrm.h"
 
+#include <Uxtheme.h>
+#pragma comment(lib, "uxtheme.lib")
+
 #ifdef _DEBUG
 #define new DEBUG_NEW
 #endif
@@ -23,11 +26,13 @@ BEGIN_MESSAGE_MAP(CMainFrame, CMDIFrameWndEx)
 	ON_WM_CLOSE()
 	ON_MESSAGE(WM_CHECK_CHILD_FRAMES, &CMainFrame::OnCheckChildFrames)
 	ON_WM_CONTEXTMENU()
+	ON_WM_SIZE()
 END_MESSAGE_MAP()
 
 //ID_SEPARATOR의 갯수는 .h에 정의된 enum status_id의 갯수와 일치해야 한다.
 static UINT indicators[] =
 {
+	ID_SEPARATOR,
 	ID_SEPARATOR,
 	ID_SEPARATOR,
 	ID_SEPARATOR,
@@ -74,10 +79,26 @@ int CMainFrame::OnCreate(LPCREATESTRUCT lpCreateStruct)
 
 	m_wndStatusBar.SetIndicators(indicators, sizeof(indicators)/sizeof(UINT));
 	m_wndStatusBar.SetPaneInfo(status_default, ID_SEPARATOR, SBPS_STRETCH, 240);
+	m_wndStatusBar.SetPaneInfo(status_progress, ID_SEPARATOR, SBPS_NORMAL, 100);
 	m_wndStatusBar.SetPaneInfo(status_image_info, ID_SEPARATOR, SBPS_NORMAL, 140);
 	m_wndStatusBar.SetPaneInfo(status_duration_info, ID_SEPARATOR, SBPS_NORMAL, 100);
 	m_wndStatusBar.SetPaneInfo(status_zoom_info, ID_SEPARATOR, SBPS_NORMAL, 45);
 	m_wndStatusBar.SetPaneInfo(status_selected_info, ID_SEPARATOR, SBPS_NORMAL, 45);
+
+	CRect rc;
+	m_wndStatusBar.GetItemRect(status_progress, &rc);
+	m_progress.Create(WS_CHILD | WS_VISIBLE, rc, &m_wndStatusBar, 1);
+	m_progress.SetRange32(0, 100);
+	/*
+	m_progress.ModifyStyleEx(WS_EX_CLIENTEDGE | WS_EX_STATICEDGE, 0, SWP_FRAMECHANGED);
+	HWND h = m_progress.GetSafeHwnd();
+	LONG ex = ::GetWindowLong(h, GWL_EXSTYLE);
+	ex &= ~(WS_EX_CLIENTEDGE | WS_EX_STATICEDGE);
+	::SetWindowLong(h, GWL_EXSTYLE, ex);
+	::SetWindowPos(h, nullptr, 0, 0, 0, 0,
+		SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_FRAMECHANGED);
+	::SetWindowTheme(m_progress.GetSafeHwnd(), L"Explorer", nullptr);
+	*/
 
 	// ★ 도킹 활성화 (CMFCToolBar 방식)
 	m_wndToolBar.EnableDocking(CBRS_ALIGN_ANY);
@@ -90,7 +111,9 @@ int CMainFrame::OnCreate(LPCREATESTRUCT lpCreateStruct)
 
 	// 툴바를 고정하여 이동 불가하게 설정 (선택사항)
 	//m_wndToolBar.SetBarStyle(m_wndToolBar.GetBarStyle() &
-	//	~(CBRS_GRIPPER | CBRS_SIZE_DYNAMIC | CBRS_BORDER_TOP | CBRS_BORDER_BOTTOM | CBRS_BORDER_LEFT | CBRS_BORDER_RIGHT));	DragAcceptFiles();
+	//	~(CBRS_GRIPPER | CBRS_SIZE_DYNAMIC | CBRS_BORDER_TOP | CBRS_BORDER_BOTTOM | CBRS_BORDER_LEFT | CBRS_BORDER_RIGHT));
+
+	DragAcceptFiles();
 
 	return 0;
 }
@@ -214,6 +237,16 @@ void CMainFrame::set_image_info(int total_frames, int width, int height)
 	set_status_text(status_image_info, text);
 }
 
+void CMainFrame::set_progress_range(int min, int max)
+{
+	m_progress.SetRange32(min, max);
+}
+
+void CMainFrame::set_progress_pos(int pos)
+{
+	m_progress.SetPos(pos);
+}
+
 void CMainFrame::set_duration_info(std::deque<int>& frame_delays)
 {
 	int total_ms = 0;
@@ -264,4 +297,18 @@ void CMainFrame::OnContextMenu(CWnd* pWnd, CPoint point)
 	pSubMenu = menu.GetSubMenu(0);
 
 	pSubMenu->TrackPopupMenu(TPM_LEFTALIGN | TPM_RIGHTBUTTON, point.x, point.y, this);
+}
+
+void CMainFrame::OnSize(UINT nType, int cx, int cy)
+{
+	CMDIFrameWndEx::OnSize(nType, cx, cy);
+
+	// TODO: 여기에 메시지 처리기 코드를 추가합니다.
+	if (m_progress.GetSafeHwnd() == NULL)
+		return;
+
+	CRect rc;
+	m_wndStatusBar.GetItemRect(status_progress, &rc);
+	rc.DeflateRect(0, 1, 3, 2); // 글자 baseline 맞추려면 y를 조금 더 줄임
+	m_progress.MoveWindow(rc);
 }

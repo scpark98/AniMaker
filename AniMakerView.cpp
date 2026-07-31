@@ -162,7 +162,7 @@ void CAniMakerView::OnDraw(CDC* /*pDC*/)
 				D2D1_RECT_F rtext = rthumb;
 				rtext.top = rthumb.bottom + 8.0f / m_zoom;
 				rtext.bottom = rtext.top + 24.0f / m_zoom;
-				draw_text(d2dc, rtext, str, _T("Arial"), 12.0f / m_zoom, FW_NORMAL, Gdiplus::Color::Black, Gdiplus::Color::LightGray, DT_CENTER | DT_TOP);
+				draw_text(d2dc, rtext, str, _T("Arial"), 12.0f / m_zoom, FW_NORMAL, Gdiplus::Color::Black, Gdiplus::Color::Transparent, Gdiplus::Color::LightGray, Gdiplus::Color::Transparent, 0.0f, DT_CENTER | DT_TOP);
 
 				//선택항목이면 royalblue border로 표시한다.
 				if (std::find(m_selected.begin(), m_selected.end(), i) != m_selected.end())

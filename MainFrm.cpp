@@ -256,7 +256,7 @@ void CMainFrame::set_duration_info(std::deque<int>& frame_delays)
 
 	CString text;
 
-	text.Format(_T("total %.3f ms"), (double)total_ms / 1000.0f);
+	text.Format(_T("total %.3f s"), (double)total_ms / 1000.0);
 	set_status_text(status_duration_info, text);
 }
 

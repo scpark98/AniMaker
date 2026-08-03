@@ -323,14 +323,22 @@ BOOL CAniMakerView::PreTranslateMessage(MSG* pMsg)
 				if (nFrames <= 0)
 					return TRUE;
 
-				//멀티선택 상태에서 좌우 방향키를 누른다면 맨 처음 혹은 맨 끝 선택항목만 남긴다.
-				if (m_selected.size() > 1)
-					m_selected.resize(1);
-
-				if (pMsg->wParam == VK_LEFT)
-					m_selected[0] = max(0, m_selected[0] - 1);
+				if (m_selected.empty())
+				{
+					//선택된 항목이 없는 상태의 첫 방향키 입력은 첫 프레임 선택으로 처리한다.
+					m_selected.push_back(0);
+				}
 				else
-					m_selected[0] = min(nFrames - 1, m_selected[0] + 1);
+				{
+					//멀티선택 상태에서 좌우 방향키를 누른다면 맨 처음 혹은 맨 끝 선택항목만 남긴다.
+					if (m_selected.size() > 1)
+						m_selected.resize(1);
+
+					if (pMsg->wParam == VK_LEFT)
+						m_selected[0] = max(0, m_selected[0] - 1);
+					else
+						m_selected[0] = min(nFrames - 1, m_selected[0] + 1);
+				}
 
 				// 선택 프레임이 보이도록 자동 스크롤
 				ensure_frame_visible(m_selected[0]);
@@ -339,11 +347,12 @@ BOOL CAniMakerView::PreTranslateMessage(MSG* pMsg)
 			}
 			case VK_HOME:
 			{
-				//멀티선택 상태에서 좌우 방향키를 누른다면 맨 처음 혹은 맨 끝 선택항목만 남긴다.
-				if (m_selected.size() > 1)
-					m_selected.resize(1);
+				if (m_img.get_frame_count() <= 0)
+					return TRUE;
 
-				m_selected[0] = 0;
+				//Home, End는 멀티선택 여부와 무관하게 첫 프레임 혹은 마지막 프레임 단일 선택으로 만든다.
+				m_selected.clear();
+				m_selected.push_back(0);
 
 				ensure_frame_visible(m_selected[0]);
 				Invalidate(FALSE);
@@ -351,13 +360,12 @@ BOOL CAniMakerView::PreTranslateMessage(MSG* pMsg)
 			}
 			case VK_END:
 			{
-				//멀티선택 상태에서 좌우 방향키를 누른다면 맨 처음 혹은 맨 끝 선택항목만 남긴다.
-				if (m_selected.size() > 1)
-					m_selected.resize(1);
-
 				int nFrames = m_img.get_frame_count();
-				if (nFrames > 0)
-					m_selected[0] = nFrames - 1;
+				if (nFrames <= 0)
+					return TRUE;
+
+				m_selected.clear();
+				m_selected.push_back(nFrames - 1);
 
 				ensure_frame_visible(m_selected[0]);
 				Invalidate(FALSE);
@@ -1835,7 +1843,7 @@ void CAniMakerView::OnMenuViewMakeTransparentBack()
 
 	pMain->set_progress_pos(0);
 
-	Invalidate();
+	update_ui_after_edit();
 }
 
 void CAniMakerView::OnMenuSelectAll()

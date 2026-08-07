@@ -67,8 +67,31 @@ private:
 	float					m_zoom_step = 0.1f;
 
 	void					recalc_scrollbars();
+	bool					m_in_recalc_scrollbars = false;
 	float					get_frame_step();
+
+	//가로 스크롤바에서 1프레임을 표현하는 단위. 스크롤바 값 = 프레임 인덱스 * 이 값.
+	int						get_hscroll_unit();
+
+	//값이 실제로 바뀐 경우에만 SetScrollInfo를 호출한다.
+	void					update_scrollbar(int bar, const SCROLLINFO& si);
+
+	//사용자가 스크롤바 썸을 실제로 끌고 있는 중인지. 이때는 스크롤바에 위치를 되돌려 쓰지 않는다.
+	bool					m_thumb_dragging = false;
 	void					ensure_frame_visible(int index);
+
+	//zoom을 유효범위로 제한해 적용하고 레지스트리 저장 + 상태바 표시까지 함께 처리한다.
+	void					set_zoom(float zoom);
+
+	//OnDraw에서 쓰는 브러시와 text format을 준비한다. font_size가 바뀐 경우에만 text format을 다시 만든다.
+	void					prepare_draw_resources(float font_size);
+
+	ComPtr<IDWriteFactory>			m_write_factory;
+	ComPtr<IDWriteTextFormat>		m_text_format;
+	float							m_text_format_size = 0.f;
+	ComPtr<ID2D1SolidColorBrush>	m_br_text;
+	ComPtr<ID2D1SolidColorBrush>	m_br_border;
+	ComPtr<ID2D1SolidColorBrush>	m_br_selected;
 
 	//선택된 인덱스
 	std::deque<int>			m_selected;

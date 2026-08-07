@@ -126,4 +126,21 @@ View 의 `m_d2dc` 와 Preview 의 `m_imgDlg` 가 서로 다른 D2D 팩토리에�
 2. `CMainFrame::set_duration_info` 가 `total_ms / 1000` 을 계산해 놓고 단위를 `ms` 로 출력 → `s` 로 수정.
 3. `OnMenuViewMakeTransparentBack` 이 편집 후 `Invalidate()` 만 호출해 Preview 와 상태바에 반영되지 않던 것 → `update_ui_after_edit()` 로 교체.
 
-**남은 것:** §5 의 Undo 미적용 함수 6개.
+**수정 완료 (2026-08-07) — 스크롤바:**
+
+이 항목들은 원인이 겉으로 드러나지 않으니 손대기 전에 반드시 읽을 것.
+
+1. **가로 스크롤바의 단위는 픽셀이 아니라 "프레임 × `WHEEL_DELTA`(120)" 다** (`get_hscroll_unit()`). 이상해 보이지만 이유가 둘 있다.
+   - 월드 픽셀을 그대로 범위로 쓰면 231프레임짜리에서 `nMax` 가 175600까지 올라가는데, `WM_HSCROLL` 이 실어 보내는 `nPos` 는 16bit 라 그 위치를 표현하지 못한다. 게다가 MFC 가 `(short)HIWORD` 로 넘기므로 실질 상한은 **32767** 이다. 그래서 프레임 단위로 낮췄다.
+   - 그런데 **가로 틸트휠이 `WM_MOUSEHWHEEL` 로 오지 않는다.** 마우스 드라이버가 `GetScrollInfo` 로 현재 위치를 한 번 읽은 뒤, 자기 누산기로 `WHEEL_DELTA` 씩 증감시킨 값을 `WM_HSCROLL + SB_THUMBTRACK` 으로 보낸다. 단위가 "1 = 1프레임" 이면 한 틱에 120프레임을 건너뛴다. **1프레임 = 120** 으로 맞춰야 휠 한 틱이 정확히 한 프레임이 된다. 프레임이 273개를 넘으면 32767 상한 때문에 단위가 줄어들고, 그만큼 한 틱 이동량이 커진다.
+2. **`SB_THUMBTRACK` 에서 `nTrackPos` 를 쓰면 안 된다.** 위의 휠은 실제 썸 드래그가 아니라서 Windows 가 `nTrackPos` 를 갱신하지 않고 직전 드래그 값에 고정돼 있다. `nPos` 를 쓴다 (단위가 프레임이라 16bit 로 충분).
+3. **진짜 썸 드래그 중에는 스크롤바에 위치를 되돌려 쓰지 않는다** (`m_thumb_dragging`). 프레임 격자로 스냅한 값을 밀어넣으면 사용자가 끄는 위치와 싸워 썸이 좌우로 떨린다. 진짜 드래그와 휠이 만든 가짜 `SB_THUMBTRACK` 은 `::GetCapture() == m_hWnd` 로 구분한다.
+4. `recalc_scrollbars` 에 **재진입 가드** + **`SIF_DISABLENOSCROLL`**. 스크롤바를 감추면 클라이언트 크기가 바뀌어 `WM_SIZE → OnSize → recalc_scrollbars` 로 되돌아오고, 가로/세로가 서로의 표시 여부를 뒤집으며 진동한다.
+5. **프레임 단위 스냅을 `recalc_scrollbars` 에서 뺐다.** 매 recalc 마다 반올림하면 `ensure_frame_visible` 이 맞춰놓은 위치와 커서 고정 줌의 보정값까지 격자로 끌려간다. 스냅은 프레임 단위로 움직이는 쪽(`OnHScroll`, `OnMouseHWheel`)에서만 한다.
+6. zoom 레지스트리 저장을 `recalc_scrollbars` 에서 분리 (`set_zoom`). 스크롤 틱마다 레지스트리에 쓰고 있었다.
+
+**수정 완료 (2026-08-07) — `OnDraw` 성능:** 가시 영역 컬링이 없어 231프레임을 매번 전부 그렸고, 프레임 라벨마다 `Common` 의 `draw_text` 가 텍스트 레이아웃을 새로 만들고 **그림자 이펙트를 13패스** 그렸다(`show_shadow` 기본값이 `true`). → 화면에 걸치는 프레임만 그리고(231장 중 8장), 라벨은 캐시한 `IDWriteTextFormat` + `DrawText`, 테두리는 미리 만든 브러시로 직접 그린다. 실측 0~31ms.
+
+**남은 것:**
+- §5 의 Undo 미적용 함수 6개.
+- **가로휠을 굴리는 동안 스크롤바가 클래식(3D raised) ↔ 테마(가는 라운드) 모양으로 교대**한다. 위 1번의 마우스 드라이버가 우리 프로세스 안에서 스크롤바를 레거시 경로로 다시 그리기 때문이며, **우리 코드로는 막을 수 없다**(세로휠·썸 드래그 등 드라이버가 개입하지 않는 경로에서는 전혀 나타나지 않음을 확인). 없애려면 `WS_HSCROLL` 을 떼고 가로만 `CSCScrollbar`(Common 의 자체 그리기 스크롤바)로 교체해야 한다. 그 경우 §3 의 레이아웃 6중 중복부터 `get_layout()` 으로 통합하는 것이 선행이다. 기능에는 문제가 없어 보류 중.

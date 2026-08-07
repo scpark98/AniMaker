@@ -48,6 +48,7 @@ CAniMakerApp::CAniMakerApp() noexcept
 // 유일한 CAniMakerApp 개체입니다.
 
 CAniMakerApp theApp;
+CSCLog gLog;
 
 
 // CAniMakerApp 초기화
@@ -58,6 +59,8 @@ BOOL CAniMakerApp::InitInstance()
 	InitCtrls.dwSize = sizeof(InitCtrls);
 	InitCtrls.dwICC = ICC_WIN95_CLASSES;
 	InitCommonControlsEx(&InitCtrls);
+
+	gLog.write_start_log();
 
 	CWinAppEx::InitInstance();
 

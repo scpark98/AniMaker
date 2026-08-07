@@ -110,6 +110,10 @@ void CAniMakerView::OnDraw(CDC* /*pDC*/)
 
 	D2D1_SIZE_F sz_dc = m_d2dc.get_size();
 
+	//20260807 by claude. [진단]
+	ULONGLONG tick_begin = GetTickCount64();
+	int drawn = 0;
+
 	d2dc->BeginDraw();
 	d2dc->Clear(get_sys_d2color(COLOR_3DFACE));
 
@@ -130,48 +134,62 @@ void CAniMakerView::OnDraw(CDC* /*pDC*/)
 
 		float margin = m_thumb_margin / m_zoom;
 		float gap = m_thumb_gap / m_zoom;
+		float font_size = 12.0f / m_zoom;
 
-		float x = margin;
+		//20260807 by claude. 화면에 걸치는 프레임만 그린다.
+		//프레임이 수백 장인 애니메이션에서 화면 밖 프레임의 DrawBitmap/DrawText 비용이 그대로 매 프레임 누적되고 있었다.
+		float view_left = m_pt_scroll.x;
+		float view_right = m_pt_scroll.x + sz_dc.width / m_zoom;
+
+		prepare_draw_resources(font_size);
+
 		float y = margin;
 		CString str;
 
 		for (int i = 0; i < nFrames; i++)
 		{
+			float left = margin + i * (thumbW + gap);
+			float right = left + thumbW;
+
+			if (right < view_left || left > view_right)
+				continue;
+
 			ID2D1Bitmap1* pFrame = m_img.get_frame_img(i);
-			if (pFrame)
+			if (!pFrame)
+				continue;
+
+			drawn++;
+
+			D2D1_RECT_F rthumb = D2D1::RectF(left, y, right, y + thumbH);
+
+			//alpha가 포함된 이미지라면 격자 패턴을 먼저 그려주고
+			if (m_img.get_alpha_pixel_count() > 0)
 			{
-				D2D1_RECT_F rthumb = D2D1::RectF(x, y, x + thumbW, y + thumbH);
-
-				//alpha가 포함된 이미지라면 격자 패턴을 먼저 그려주고
-				if (m_img.get_alpha_pixel_count() > 0)
-				{
-					auto zigzag = m_d2dc.get_zigzag_brush();
-					float zigzag_size = m_d2dc.get_zigzag_size();
-					zigzag->SetTransform(D2D1::Matrix3x2F::Scale(zigzag_size / m_zoom, zigzag_size / m_zoom) * D2D1::Matrix3x2F::Translation(rthumb.left, rthumb.top));
-					d2dc->FillRectangle(rthumb, zigzag.Get());
-				}
-
-				//이미지 표시
-				d2dc->DrawBitmap(pFrame, rthumb);
-
-				//이미지 영역에 옅은 회색 테두리 표시
-				draw_rect(d2dc, rthumb, Gdiplus::Color::LightGray, Gdiplus::Color::Transparent, 1.0f / m_zoom);
-
-				//frame index와 delay 표시
-				str.Format(_T("F:%d D:%d"), i, m_img.get_frame_delay(i));
-				D2D1_RECT_F rtext = rthumb;
-				rtext.top = rthumb.bottom + 8.0f / m_zoom;
-				rtext.bottom = rtext.top + 24.0f / m_zoom;
-				draw_text(d2dc, rtext, str, _T("Arial"), 12.0f / m_zoom, FW_NORMAL, Gdiplus::Color::Black, Gdiplus::Color::Transparent, Gdiplus::Color::LightGray, Gdiplus::Color::Transparent, 0.0f, DT_CENTER | DT_TOP);
-
-				//선택항목이면 royalblue border로 표시한다.
-				if (std::find(m_selected.begin(), m_selected.end(), i) != m_selected.end())
-				{
-					//inflate_rect(rthumb, 0, 0);
-					draw_rect(d2dc, rthumb, Gdiplus::Color::RoyalBlue, Gdiplus::Color::Transparent, 4.0f / m_zoom);
-				}
+				auto zigzag = m_d2dc.get_zigzag_brush();
+				float zigzag_size = m_d2dc.get_zigzag_size();
+				zigzag->SetTransform(D2D1::Matrix3x2F::Scale(zigzag_size / m_zoom, zigzag_size / m_zoom) * D2D1::Matrix3x2F::Translation(rthumb.left, rthumb.top));
+				d2dc->FillRectangle(rthumb, zigzag.Get());
 			}
-			x += thumbW + gap;
+
+			//이미지 표시
+			d2dc->DrawBitmap(pFrame, rthumb);
+
+			//이미지 영역에 옅은 회색 테두리 표시
+			//20260807 by claude. draw_rect는 호출할 때마다 브러시 2개와 path geometry를 새로 만든다. 미리 만들어둔 브러시로 직접 그린다.
+			d2dc->DrawRectangle(rthumb, m_br_border.Get(), 1.0f / m_zoom);
+
+			//frame index와 delay 표시
+			str.Format(_T("F:%d D:%d"), i, m_img.get_frame_delay(i));
+			D2D1_RECT_F rtext = rthumb;
+			rtext.top = rthumb.bottom + 8.0f / m_zoom;
+			rtext.bottom = rtext.top + 24.0f / m_zoom;
+
+			if (m_text_format)
+				d2dc->DrawText(str, str.GetLength(), m_text_format.Get(), rtext, m_br_text.Get());
+
+			//선택항목이면 royalblue border로 표시한다.
+			if (std::find(m_selected.begin(), m_selected.end(), i) != m_selected.end())
+				d2dc->DrawRectangle(rthumb, m_br_selected.Get(), 4.0f / m_zoom);
 		}
 	}
 
@@ -197,6 +215,10 @@ void CAniMakerView::OnDraw(CDC* /*pDC*/)
 
 	if (SUCCEEDED(hr))
 		hr = m_d2dc.get_swapchain()->Present(0, 0);
+
+	//20260807 by claude. [진단] 그리기가 실제로 일어나는지, 몇 장을 몇 ms에 그리는지 확인.
+	logWrite(_T("[draw] scroll.x=%.1f drawn=%d/%d elapsed=%llums hr=0x%08X"),
+		m_pt_scroll.x, drawn, m_img.get_frame_count(), GetTickCount64() - tick_begin, hr);
 }
 
 
@@ -290,6 +312,11 @@ BOOL CAniMakerView::PreTranslateMessage(MSG* pMsg)
 {
 	// TODO: 여기에 특수화된 코드를 추가 및/또는 기본 클래스를 호출합니다.
 	//TRACE(_T("message = %u, wParam = %u, lParam = %ld\n"), pMsg->message, pMsg->wParam, pMsg->lParam);
+
+	//20260807 by claude. [진단] WM_MOUSEHWHEEL이 이 view까지 오는지, 어느 hwnd로 가는지 확인.
+	if (pMsg->message == WM_MOUSEHWHEEL)
+		logWrite(_T("[msg] WM_MOUSEHWHEEL hwnd=%p (view=%p) focus=%p wParam=%08X"), pMsg->hwnd, m_hWnd, ::GetFocus(), (UINT)pMsg->wParam);
+
 	if (pMsg->message == WM_KEYDOWN)
 	{
 		switch (pMsg->wParam)
@@ -298,9 +325,7 @@ BOOL CAniMakerView::PreTranslateMessage(MSG* pMsg)
 			case VK_OEM_PLUS:
 			{
 				// '+' 키: 줌 인
-				m_zoom += m_zoom_step;
-				m_zoom = min(m_zoom, m_zoom_max);
-				((CMainFrame*)(AfxGetApp()->m_pMainWnd))->set_zoom_info(m_zoom);
+				set_zoom(m_zoom + m_zoom_step);
 				recalc_scrollbars();
 				Invalidate(FALSE);
 				return TRUE;
@@ -309,9 +334,7 @@ BOOL CAniMakerView::PreTranslateMessage(MSG* pMsg)
 			case VK_OEM_MINUS:
 			{
 				// '-' 키: 줌 아웃
-				m_zoom -= m_zoom_step;
-				m_zoom = max(m_zoom, m_zoom_min);
-				((CMainFrame*)(AfxGetApp()->m_pMainWnd))->set_zoom_info(m_zoom);
+				set_zoom(m_zoom - m_zoom_step);
 				recalc_scrollbars();
 				Invalidate(FALSE);
 				return TRUE;
@@ -442,12 +465,22 @@ void CAniMakerView::OnHScroll(UINT nSBCode, UINT nPos, CScrollBar* pScrollBar)
 	SCROLLINFO si = { sizeof(SCROLLINFO), SIF_ALL };
 	GetScrollInfo(SB_HORZ, &si);
 
+	//20260807 by claude. 진짜 썸 드래그인지 구분한다.
+	//가로휠도 SB_THUMBTRACK으로 들어오지만 그건 마우스 드라이버가 만든 것이라 캡처가 없다.
+	//그 경우는 우리가 스크롤바를 갱신해줘야 썸이 따라 움직인다.
+	m_thumb_dragging = (nSBCode == SB_THUMBTRACK && ::GetCapture() == m_hWnd);
+
+	//20260807 by claude. [진단] 스크롤바에서 오는 알림 종류와 트랙 위치.
+	logWrite(_T("[OnHScroll] nSBCode=%u nPos=%u nTrackPos=%d nPos(si)=%d pt_scroll.x=%.1f capture=%p (view=%p) dragging=%d"),
+		nSBCode, nPos, si.nTrackPos, si.nPos, m_pt_scroll.x, ::GetCapture(), m_hWnd, (int)m_thumb_dragging);
+
 	// 현재 프레임 인덱스 기반으로 이동
 	int curFrame = (int)roundf(m_pt_scroll.x / frame_step);
 
+	int unit = get_hscroll_unit();
+
 	// 한 페이지에 보이는 프레임 수
-	float visibleW = (si.nPage > 0) ? (float)si.nPage : 1.f;
-	int pageFrames = max(1, (int)(visibleW / frame_step));
+	int pageFrames = max(1, (int)si.nPage / unit);
 
 	switch (nSBCode)
 	{
@@ -455,7 +488,13 @@ void CAniMakerView::OnHScroll(UINT nSBCode, UINT nPos, CScrollBar* pScrollBar)
 		case SB_LINERIGHT:   curFrame += 1;           break;
 		case SB_PAGELEFT:    curFrame -= pageFrames;  break;
 		case SB_PAGERIGHT:   curFrame += pageFrames;  break;
-		case SB_THUMBTRACK:  curFrame = (int)roundf((float)si.nTrackPos / frame_step); break;
+		case SB_THUMBTRACK:
+		case SB_THUMBPOSITION:
+			//20260807 by claude. nTrackPos가 아니라 nPos를 쓴다.
+			//가로 틸트휠은 WM_MOUSEHWHEEL이 아니라 WM_HSCROLL + SB_THUMBTRACK으로 들어오는데,
+			//실제 썸 드래그가 아니라서 Windows가 nTrackPos를 갱신하지 않는다(직전 드래그 값에 고정).
+			curFrame = (int)roundf((float)(int)nPos / unit);
+			break;
 		default: return;
 	}
 
@@ -594,21 +633,25 @@ BOOL CAniMakerView::OnMouseWheel(UINT nFlags, short zDelta, CPoint pt)
 	// TODO: 여기에 메시지 처리기 코드를 추가 및/또는 기본값을 호출합니다.
 	ScreenToClient(&pt);
 
+	//Shift+휠은 세로 스크롤. 한 틱에 60픽셀(화면 기준)씩 이동한다.
+	if (IsShiftPressed())
+	{
+		m_pt_scroll.y -= (zDelta / WHEEL_DELTA) * (60.0f / m_zoom);
+
+		recalc_scrollbars();
+		Invalidate();
+		return TRUE;
+	}
+
 	//Wheel에 따라 커서 중심 줌
 	float wx = pt.x / m_zoom + m_pt_scroll.x;
 	float wy = pt.y / m_zoom + m_pt_scroll.y;
 
-	if (zDelta > 0)
-		m_zoom += m_zoom_step;
-	else
-		m_zoom -= m_zoom_step;
-	m_zoom = max(m_zoom_min, min(m_zoom, m_zoom_max));
+	set_zoom(m_zoom + (zDelta > 0 ? m_zoom_step : -m_zoom_step));
 
 	// 줌 후 동일 월드 좌표가 커서 아래에 유지되도록 보정
 	m_pt_scroll.x = wx - pt.x / m_zoom;
 	m_pt_scroll.y = wy - pt.y / m_zoom;
-
-	((CMainFrame*)(AfxGetApp()->m_pMainWnd))->set_zoom_info(m_zoom);
 
 	recalc_scrollbars();
 	Invalidate();
@@ -624,11 +667,20 @@ void CAniMakerView::OnMouseHWheel(UINT nFlags, short zDelta, CPoint pt)
 	if (frame_step <= 0.f)
 		return;
 
+	//20260807 by claude. [진단] 가로휠 스크롤 미동작 추적.
+	logWrite(_T("[hwheel] zDelta=%d frame_step=%.1f pt_scroll.x=%.1f zoom=%.2f"), zDelta, frame_step, m_pt_scroll.x, m_zoom);
+
 	// 틸트 한 틱 = 1프레임 이동
+	//20260807 by claude. 현재 위치에 frame_step을 더하는 대신 프레임 인덱스로 환산해 이동한다.
+	//오른쪽 끝에서 클램프되어 격자를 벗어난 위치에서 출발해도 다시 프레임 경계로 돌아온다.
+	int curFrame = (int)roundf(m_pt_scroll.x / frame_step);
+
 	if (zDelta > 0)
-		m_pt_scroll.x += frame_step;
+		curFrame += 1;
 	else if (zDelta < 0)
-		m_pt_scroll.x -= frame_step;
+		curFrame -= 1;
+
+	m_pt_scroll.x = max(0, curFrame) * frame_step;
 
 	recalc_scrollbars();
 	Invalidate();
@@ -710,6 +762,8 @@ void CAniMakerView::OnVScroll(UINT nSBCode, UINT nPos, CScrollBar* pScrollBar)
 	SCROLLINFO si = { sizeof(SCROLLINFO), SIF_ALL };
 	GetScrollInfo(SB_VERT, &si);
 
+	m_thumb_dragging = (nSBCode == SB_THUMBTRACK && ::GetCapture() == m_hWnd);
+
 	int pos = si.nPos;
 	switch (nSBCode)
 	{
@@ -717,7 +771,12 @@ void CAniMakerView::OnVScroll(UINT nSBCode, UINT nPos, CScrollBar* pScrollBar)
 		case SB_LINEDOWN:    pos += 20;           break;
 		case SB_PAGEUP:      pos -= si.nPage;     break;
 		case SB_PAGEDOWN:    pos += si.nPage;     break;
-		case SB_THUMBTRACK:  pos = si.nTrackPos;  break;
+		case SB_THUMBTRACK:
+		case SB_THUMBPOSITION:
+			//20260807 by claude. OnHScroll과 같은 이유로 nTrackPos 대신 nPos를 쓴다.
+			//세로 범위는 콘텐츠 높이라 16bit를 넘지 않는다.
+			pos = (int)nPos;
+			break;
 		default: return;
 	}
 
@@ -729,6 +788,14 @@ void CAniMakerView::OnVScroll(UINT nSBCode, UINT nPos, CScrollBar* pScrollBar)
 
 void CAniMakerView::recalc_scrollbars()
 {
+	//20260807 by claude. SetScrollInfo가 스크롤바를 감추거나 다시 표시하면 클라이언트 크기가 바뀌어
+	//WM_SIZE → OnSize → recalc_scrollbars로 되돌아온다. 아래 SIF_DISABLENOSCROLL로 그 경로를 끊었지만
+	//다른 경로(on_size_changed 등)의 재진입까지 막기 위해 가드를 둔다.
+	if (m_in_recalc_scrollbars)
+		return;
+
+	m_in_recalc_scrollbars = true;
+
 	CRect rc;
 	GetClientRect(&rc);
 
@@ -750,31 +817,138 @@ void CAniMakerView::recalc_scrollbars()
 	float visibleW = rc.Width() / m_zoom;
 	float visibleH = rc.Height() / m_zoom;
 
-	// 가로: 프레임 단위 스냅
-	if (frame_step > 0.f)
-		m_pt_scroll.x = roundf(m_pt_scroll.x / frame_step) * frame_step;
-
 	// 클램프
+	//20260807 by claude. 프레임 단위 스냅은 여기가 아니라 프레임 단위로 움직이는 쪽(OnHScroll, OnMouseHWheel)에서 한다.
+	//모든 recalc에서 스냅하면 ensure_frame_visible이 맞춰놓은 위치나 커서 고정 줌의 보정값까지 반올림돼 어긋난다.
 	m_pt_scroll.x = max(0.f, min(m_pt_scroll.x, max(0.f, contentW - visibleW)));
 	m_pt_scroll.y = max(0.f, min(m_pt_scroll.y, max(0.f, contentH - visibleH)));
 
-	SCROLLINFO si = { sizeof(SCROLLINFO), SIF_ALL };
+	//20260807 by claude. SIF_TRACKPOS는 GetScrollInfo 전용이라 SetScrollInfo에 넘기지 않는다.
+	//SIF_DISABLENOSCROLL은 스크롤이 불필요할 때 스크롤바를 감추는 대신 비활성 상태로 남긴다.
+	//감추면 클라이언트 크기가 바뀌고, 가로/세로가 서로의 표시 여부를 뒤집으며 WM_SIZE로 진동한다.
+	SCROLLINFO si = { sizeof(SCROLLINFO), SIF_RANGE | SIF_PAGE | SIF_POS | SIF_DISABLENOSCROLL };
 
-	// 가로 스크롤
+	//20260807 by claude. 가로 스크롤바의 단위는 픽셀이 아니라 프레임이다(get_hscroll_unit 참조).
+	//월드 픽셀을 그대로 범위로 쓰면 231프레임짜리에서 nMax가 175600까지 올라가는데,
+	//WM_HSCROLL이 실어 보내는 nPos는 16bit라 그 위치를 표현하지 못한다.
+	int unit = get_hscroll_unit();
+	UINT page_frames = 1;
+	int  pos_frame = 0;
+
+	if (frame_step > 0.f)
+	{
+		page_frames = (UINT)max(1, (int)(visibleW / frame_step));
+		pos_frame = (int)roundf(m_pt_scroll.x / frame_step);
+	}
+
+	int max_frame = max(0, nFrames - 1);
+
 	si.nMin = 0;
-	si.nMax = (int)contentW;
-	si.nPage = (UINT)visibleW;
-	si.nPos = (int)m_pt_scroll.x;
-	SetScrollInfo(SB_HORZ, &si, TRUE);
+	si.nMax = max_frame * unit;
+	si.nPage = page_frames * unit;
+	si.nPos = pos_frame * unit;
+	update_scrollbar(SB_HORZ, si);
 
 	// 세로 스크롤
 	si.nMax = (int)contentH;
 	si.nPage = (UINT)visibleH;
 	si.nPos = (int)m_pt_scroll.y;
-	SetScrollInfo(SB_VERT, &si, TRUE);
+	update_scrollbar(SB_VERT, si);
 
-	//m_zoom이 변경되면 항상 recalc_scrollbars()가 호출되므로 여기에서 저장
+	//20260807 by claude. [진단] 가로·세로 스크롤바가 실제로 어떤 상태로 설정됐는지 확인.
+	SCROLLINFO chk_h = { sizeof(SCROLLINFO), SIF_ALL };
+	SCROLLINFO chk_v = { sizeof(SCROLLINFO), SIF_ALL };
+	GetScrollInfo(SB_HORZ, &chk_h);
+	GetScrollInfo(SB_VERT, &chk_v);
+	logWrite(_T("[scroll] frames=%d unit=%d client=%d,%d zoom=%.2f scroll=%.1f,%.1f | H(max=%d page=%u pos=%d) V(max=%d page=%u pos=%d)"),
+		nFrames, unit, rc.Width(), rc.Height(), m_zoom, m_pt_scroll.x, m_pt_scroll.y,
+		chk_h.nMax, chk_h.nPage, chk_h.nPos,
+		chk_v.nMax, chk_v.nPage, chk_v.nPos);
+
+	m_in_recalc_scrollbars = false;
+}
+
+void CAniMakerView::prepare_draw_resources(float font_size)
+{
+	ID2D1DeviceContext* d2dc = m_d2dc.get_d2dc();
+
+	if (!m_br_text)
+	{
+		d2dc->CreateSolidColorBrush(get_d2color(Gdiplus::Color::Black), &m_br_text);
+		d2dc->CreateSolidColorBrush(get_d2color(Gdiplus::Color::LightGray), &m_br_border);
+		d2dc->CreateSolidColorBrush(get_d2color(Gdiplus::Color::RoyalBlue), &m_br_selected);
+	}
+
+	if (!m_write_factory)
+		DWriteCreateFactory(DWRITE_FACTORY_TYPE_SHARED, __uuidof(IDWriteFactory), reinterpret_cast<IUnknown**>(m_write_factory.GetAddressOf()));
+
+	//font size가 zoom에 반비례하므로 zoom이 바뀔 때만 다시 만든다.
+	//CreateTextFormat과 텍스트 레이아웃 계산은 프레임 라벨 하나마다 반복하기엔 비싸다.
+	if (!m_text_format || m_text_format_size != font_size)
+	{
+		m_text_format.Reset();
+		m_write_factory->CreateTextFormat(L"Arial", nullptr,
+			DWRITE_FONT_WEIGHT_NORMAL, DWRITE_FONT_STYLE_NORMAL, DWRITE_FONT_STRETCH_NORMAL,
+			font_size, L"ko-kr", &m_text_format);
+
+		if (m_text_format)
+		{
+			m_text_format->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
+			m_text_format->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_NEAR);
+		}
+
+		m_text_format_size = font_size;
+	}
+}
+
+void CAniMakerView::set_zoom(float zoom)
+{
+	m_zoom = max(m_zoom_min, min(zoom, m_zoom_max));
+
 	write_profile_value(_T("setting"), _T("zoom"), m_zoom);
+	((CMainFrame*)(AfxGetApp()->m_pMainWnd))->set_zoom_info(m_zoom);
+}
+
+void CAniMakerView::update_scrollbar(int bar, const SCROLLINFO& si)
+{
+	//20260807 by claude. 값이 그대로인데 SetScrollInfo를 부르면 그때마다 비클라이언트 영역이 다시 그려진다.
+	//가로휠을 굴리면 세로 스크롤바는 값이 전혀 안 바뀌는데도 매 틱 함께 재그리기되어,
+	//가로 스크롤바가 자기 갱신으로 그려진 모습과 전체 NC 재그리기로 그려진 모습이 번갈아 보인다.
+	//20260807 by claude. 실제 썸 드래그 중에는 위치를 되돌려 쓰지 않는다.
+	//프레임 격자로 스냅한 값을 다시 밀어넣으면 사용자가 끄는 위치와 싸워 썸이 좌우로 떨린다.
+	//드래그 중에는 Windows가 썸을 직접 그리므로 우리가 갱신할 필요도 없다.
+	if (m_thumb_dragging)
+		return;
+
+	SCROLLINFO cur = { sizeof(SCROLLINFO), SIF_ALL };
+	GetScrollInfo(bar, &cur);
+
+	if (cur.nMin == si.nMin && cur.nMax == si.nMax && cur.nPage == si.nPage && cur.nPos == si.nPos)
+		return;
+
+	//20260807 by claude. bRedraw = TRUE로 주면 SetScrollInfo가 그 자리에서 스크롤바를 다시 그리는데,
+	//이 경로는 테마를 거치지 않아 클래식(3D raised) 모양으로 그려진다.
+	//뒤이은 WM_NCPAINT는 테마 모양(가는 라운드)으로 그리므로 두 모양이 번갈아 보인다.
+	//값만 갱신하고 그리기는 WM_NCPAINT 한 경로로 몰아준다.
+	//RDW_UPDATENOW로 즉시 그린다. 가로 스크롤바는 마우스 드라이버가 자기 훅에서 클래식 모양으로 다시 그리는데,
+	//그 픽셀이 화면에 합성되기 전에 테마 모양으로 덮어써야 교대가 보이지 않는다.
+	SetScrollInfo(bar, const_cast<SCROLLINFO*>(&si), FALSE);
+	RedrawWindow(nullptr, nullptr, RDW_FRAME | RDW_INVALIDATE | RDW_NOERASE | RDW_UPDATENOW);
+}
+
+int CAniMakerView::get_hscroll_unit()
+{
+	//20260807 by claude. 가로 스크롤바에서 1프레임을 몇 단위로 표현할지.
+	//가로 틸트휠은 WM_MOUSEHWHEEL이 아니라 WM_HSCROLL + SB_THUMBTRACK으로 들어오고,
+	//이때 nPos는 마우스 드라이버가 현재 위치에 WHEEL_DELTA(120)를 더하고 뺀 값이다.
+	//1프레임 = WHEEL_DELTA로 맞춰두면 휠 한 틱이 정확히 한 프레임이 된다.
+	//단 MFC가 nPos를 (short)HIWORD로 넘기므로 전체 범위가 32767을 넘으면 음수가 된다. 프레임이 많으면 단위를 줄인다.
+	int nFrames = m_img.get_frame_count();
+
+	if (nFrames <= 1)
+		return WHEEL_DELTA;
+
+	return max(1, min(WHEEL_DELTA, 32767 / (nFrames - 1)));
 }
 
 float CAniMakerView::get_frame_step()
@@ -1682,18 +1856,16 @@ void CAniMakerView::apply_to_preview()
 
 void CAniMakerView::OnMenuZoom50()
 {
-	m_zoom = 0.5f;
+	set_zoom(0.5f);
 	recalc_scrollbars();
 	Invalidate();
-	((CMainFrame*)(AfxGetApp()->m_pMainWnd))->set_zoom_info(m_zoom);
 }
 
 void CAniMakerView::OnMenuZoom100()
 {
-	m_zoom = 1.0f;
+	set_zoom(1.0f);
 	recalc_scrollbars();
 	Invalidate();
-	((CMainFrame*)(AfxGetApp()->m_pMainWnd))->set_zoom_info(m_zoom);
 }
 
 bool CAniMakerView::load_from_clipboard()

@@ -8,6 +8,7 @@
 #endif
 
 #include "resource.h"       // 주 기호입니다.
+#include "Common/log/SCLog/SCLog.h"
 
 
 // CAniMakerApp:
@@ -35,3 +36,4 @@ public:
 };
 
 extern CAniMakerApp theApp;
+extern CSCLog gLog;
